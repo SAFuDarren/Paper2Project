@@ -297,7 +297,7 @@ class WorkspaceTests(unittest.TestCase):
     def test_bilingual_links_must_match(self):
         self.initialize()
         cfg = json.loads((self.root/'.paper2project.json').read_text())
-        cfg['language'] = 'en-zh'
+        cfg['note_languages'] = ['en','zh']
         (self.root/'.paper2project.json').write_text(json.dumps(cfg))
         self.put('Library/Computer Science/Machine Learning/Concepts/One.md',
                  '# One\n\n[[Library/Library]]\n\n---\n\n# One\n\n概念。\n\n#concept\n')

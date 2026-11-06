@@ -220,5 +220,12 @@ class PreferencesTests(unittest.TestCase):
         self.prefs({'memory':{'preferences':{'unexpected_field':'fixture'}}},expected=2)
         self.prefs({'explicit':{'extensions':{'rag':{'unexpected_field':'fixture'}}}},expected=2)
 
+    def test_direct_v2_language_edit_is_not_undone_by_old_alias(self):
+        self.init(('en','zh'));path=self.root/'.paper2project.json';config=self.config()
+        config['note_languages']=['en']
+        self.put_json(path,config)
+        self.render('paper',self.card(languages=('en',)),'Library/Computer Science/Machine Learning/Papers/Sequence Models - Edited.md')
+        self.assertEqual(self.cli('check','--root',self.root)['errors'],[])
+
 
 if __name__=='__main__':unittest.main()

@@ -36,9 +36,8 @@ def normalize(raw):
     legacy=raw.get('language')
     if 'note_languages' not in raw or p['schema_version']==1:
         p['note_languages']=['en','zh'] if legacy=='en-zh' else [legacy or 'en']
-    elif legacy in ('en','en-zh') and raw.get('note_languages') in (['en'],['en','zh']) and legacy!=('en-zh' if len(raw['note_languages'])==2 else 'en'):
-        # Backward-compatible hand edits of the old language field.
-        p['note_languages']=['en','zh'] if legacy=='en-zh' else ['en']
+    # In schema v2, explicit note_languages is canonical. The legacy alias must
+    # never silently undo a manual edit to the new field.
     languages=p['note_languages']
     if not isinstance(languages,list) or not languages or len(languages)!=len(set(languages)) or not all(isinstance(x,str) and re.fullmatch(r'[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*',x) for x in languages):raise ValueError('note_languages needs unique language tags in presentation order.')
     p['language']='en-zh' if languages==['en','zh'] else (languages[0] if len(languages)==1 else 'multilingual')
