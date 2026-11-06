@@ -8,6 +8,17 @@ import os
 from pathlib import Path, PurePosixPath
 import re
 import sys
+
+# ASCII-only POSIX hosts decode non-ASCII paths with surrogate escapes. Restart
+# the file-based CLI in UTF-8 mode before paths enter note content or JSON.
+# Preserve the caller's interpreter flags, including -S (no site packages).
+if __name__ == '__main__' and sys.getfilesystemencoding().lower() in ('ascii', 'ansi_x3.4-1968'):
+    original_argv = list(sys.orig_argv)
+    original_argv[0] = sys.executable
+    script_index = original_argv.index(sys.argv[0], 1)
+    original_argv[script_index:script_index] = ['-X', 'utf8']
+    os.execv(sys.executable, original_argv)
+
 import profiles
 import i18n
 

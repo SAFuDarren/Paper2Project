@@ -1,0 +1,2 @@
+# Content-versioned SVG URLs require identical bytes on every checkout.
+*.svg text eol=lf
