@@ -3,6 +3,8 @@
 from pathlib import Path
 from html import escape
 import json
+import hashlib
+import re
 import math
 import random
 
@@ -194,11 +196,32 @@ def build(locale):
 
 def main():
     dest = ROOT / 'assets/readme'
-    dest.mkdir(parents=True,exist_ok=True)
+    # The filename changes with the image bytes, so README updates never reuse
+    # an older image URL. Each language has one active generated illustration.
+    pattern = re.compile(r'\]\((assets/readme/research-network(?:\.[A-Za-z0-9-]+)*\.svg)\)')
+    plans = []
     for locale in COPY:
-        name = 'research-network.svg' if locale=='en' else f'research-network.{locale}.svg'
-        (dest/name).write_text(build(locale),encoding='utf-8',newline='')
-        print((dest/name).relative_to(ROOT))
+        content = build(locale)
+        digest = hashlib.sha256(content.encode('utf-8')).hexdigest()[:12]
+        name = f'research-network.{locale}.{digest}.svg'
+        readme = ROOT / ('README.md' if locale == 'en' else 'README.zh-CN.md')
+        body = readme.read_text(encoding='utf-8')
+        matches = pattern.findall(body)
+        if len(matches) != 1:
+            raise ValueError(f'{readme.name}: expected one generated illustration link')
+        old_path = ROOT / matches[0]
+        new_path = dest / name
+        updated = pattern.sub(f'](assets/readme/{name})', body, count=1)
+        plans.append((new_path, content, readme, updated, old_path))
+    dest.mkdir(parents=True, exist_ok=True)
+    active = {p[0] for p in plans}
+    for new_path, content, readme, updated, old_path in plans:
+        new_path.write_text(content, encoding='utf-8', newline='')
+        readme.write_text(updated, encoding='utf-8', newline='')
+        if old_path not in active and old_path.is_file():
+            old_path.unlink()
+        print(new_path.relative_to(ROOT))
+
 
 if __name__ == '__main__':
     main()

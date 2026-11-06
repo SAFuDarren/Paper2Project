@@ -13,7 +13,7 @@
   <a href="#quickstart">Quickstart</a> · <a href="#how-it-is-organized">Workspace</a> · <a href="#make-it-yours">Preferences</a> · <a href="README.zh-CN.md">简体中文</a>
 </p>
 
-![An illustrative research workspace: a focused Research Map beside a Full Network of papers, concepts, directions and projects.](assets/readme/research-network.svg)
+![An illustrative research workspace: a focused Research Map beside a Full Network of papers, concepts, directions and projects.](assets/readme/research-network.en.abdf69850e37.svg)
 
 *Illustrative network with synthetic notes and links. This is a visual example of the organization, not an application screenshot. Real research connections require source support.*
 

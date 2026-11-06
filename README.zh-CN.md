@@ -13,7 +13,7 @@
   <a href="#开始使用">开始使用</a> · <a href="#目录怎么组织">目录结构</a> · <a href="#按你的偏好调整">自定义偏好</a> · <a href="README.md">English</a>
 </p>
 
-![模拟研究工作区：左侧为简洁的 Research Map，右侧为展开论文、概念、方向与项目的 Full Network。](assets/readme/research-network.zh-CN.svg)
+![模拟研究工作区：左侧为简洁的 Research Map，右侧为展开论文、概念、方向与项目的 Full Network。](assets/readme/research-network.zh-CN.eb38f4f8a9a1.svg)
 
 *图中节点与连线均为模拟，用于说明组织方式，并非应用截图。真实研究联系需要对应的来源依据。*
 
