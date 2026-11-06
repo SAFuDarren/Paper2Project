@@ -119,7 +119,7 @@ python scripts/p2p.py export --root /path/to/Academic --output /path/to/notes.js
 python -m unittest discover -s tests -v
 ```
 
-GitHub Actions 覆盖 **Linux、macOS、Windows × Python 3.10、3.12、3.14**。程序检查结构、本地链接、标识、语言处理和受保护的写入。来源阅读、科学判断与翻译质量仍由 agent 负责。
+GitHub Actions 覆盖 **Linux、macOS、Windows × Python 3.10–3.14**。15 组组合各使用两个不同的哈希种子运行完整测试，并核对 README 配图的生成结果可复现。程序检查结构、本地链接、标识、语言处理和受保护的写入。来源阅读、科学判断与翻译质量仍由 agent 负责。
 
 运行 `python scripts/render_readme_graph.py` 可以复现两张 README 配图。配图只使用模拟数据和默认角色配色。
 

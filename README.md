@@ -119,7 +119,7 @@ python scripts/p2p.py export --root /path/to/Academic --output /path/to/notes.js
 python -m unittest discover -s tests -v
 ```
 
-GitHub Actions tests **Linux, macOS and Windows × Python 3.10, 3.12 and 3.14**. Checks cover structure, local links, identity, language handling and guarded writes. Source reading, scientific judgment and translation quality remain the agent's responsibility.
+GitHub Actions tests **Linux, macOS and Windows × Python 3.10–3.14**. Each of the 15 combinations runs the full suite twice with different hash seeds and verifies reproducible README illustrations. Checks cover structure, local links, identity, language handling and guarded writes. Source reading, scientific judgment and translation quality remain the agent's responsibility.
 
 To reproduce the two README illustrations: `python scripts/render_readme_graph.py`. They use only synthetic data and the default role palette.
 

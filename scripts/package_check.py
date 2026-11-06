@@ -21,7 +21,7 @@ def main():
             absolute_home=r'/(?:Users|home)/[A-Za-z0-9_.-]+/'
             windows_home=r'[A-Za-z]:\\Users\\[A-Za-z0-9_.-]+\\'
             if re.search(absolute_home,text) or re.search(windows_home,text):errors.append('Machine-specific home path in '+str(path.relative_to(ROOT)))
-    for path in [ROOT/'SKILL.md',ROOT/'README.md',*(ROOT/'references').glob('*.md'),*(ROOT/'examples').glob('*.md')]:
+    for path in [ROOT/'SKILL.md',*sorted(ROOT.glob('README*.md')),*(ROOT/'references').glob('*.md'),*(ROOT/'examples').glob('*.md')]:
         text=path.read_text(encoding='utf-8')
         for target in re.findall(r'\]\(([^)]+)\)',text):
             if '://' in target or target.startswith('#'):continue

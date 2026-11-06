@@ -14,7 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        python: ['3.10', '3.12', '3.14']
+        python: ['3.10', '3.11', '3.12', '3.13', '3.14']
     env:
       PYTHONUTF8: '1'
       PYTHONDONTWRITEBYTECODE: '1'
@@ -27,8 +27,18 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Runtime
         run: python -c "import platform,sys; print(platform.platform()); print(sys.version)"
-      - name: Unit and workflow tests
+      - name: Full suite (hash seed 0)
+        env:
+          PYTHONHASHSEED: '0'
         run: python -m unittest discover -s tests -v
+      - name: Full suite (hash seed 37)
+        env:
+          PYTHONHASHSEED: '37'
+        run: python -m unittest discover -s tests -v
+      - name: Reproducible README illustrations
+        run: |
+          python scripts/render_readme_graph.py
+          git diff --exit-code -- README.md README.zh-CN.md assets/readme
       - name: Compile scripts
         run: python -m compileall -q scripts
       - name: Package checks
