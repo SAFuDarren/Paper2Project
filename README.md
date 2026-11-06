@@ -35,6 +35,12 @@ Connect what you have read to questions you can investigate. Paper2Project helps
 
 Use the same recognized academic names and role colors in both views: **blue** fields, **warm gold** potential directions, **coral** projects, **teal** papers and **purple** concepts. Colors are configurable. Graphs reflect maintained links between Markdown notes; the illustration above is a reproducible example. Obsidian provides the native interactive graph.
 
+### A simple example
+
+Two papers approach the same question differently. Link **Paper A** and **Paper B** through a **shared concept** in Library, then open **Compare approaches** as a project to record your question, method and findings. **Test an assumption** can become a linked follow-up project.
+
+The diagram uses neutral field and direction labels so you can imagine your own research in their place. Use your discipline's recognized names in the actual workspace.
+
 ## How it is organized
 
 **Library holds existing knowledge. Projects holds research you can develop.** Both follow the same discipline and field hierarchy. Classify papers by their subject, and link to the same project home wherever disciplines intersect.

@@ -15,9 +15,10 @@ COPY = {
         'sample': 'ILLUSTRATIVE WORKSPACE',
         'map': 'Research Map', 'map_sub': 'Follow the branches.',
         'full': 'Full Network', 'full_sub': 'Explore the papers and concepts behind them.',
-        'cs': 'Computer Science', 'physics': 'Physics',
-        'ml': 'Machine Learning', 'qi': 'Quantum Information', 'sp': 'Statistical Physics',
-        'pa': 'Project A', 'pb': 'Project B',
+        'field_a': 'Your field', 'field_b': 'Related field',
+        'direction_a': 'Direction A', 'direction_b': 'Direction B', 'direction_c': 'Direction C',
+        'pa': 'Compare approaches', 'pb': 'Test an assumption',
+        'paper_a': 'Paper A', 'paper_b': 'Paper B', 'shared': 'Shared concept',
         'field': 'Fields', 'direction': 'Potential directions', 'project': 'Projects',
         'paper': 'Papers', 'concept': 'Concepts',
         'bridge': 'candidate connection', 'same': 'Two views. The same connected notes.',
@@ -31,9 +32,10 @@ COPY = {
         'sample': '模拟工作区',
         'map': 'Research Map', 'map_sub': '先看清研究的枝干。',
         'full': 'Full Network', 'full_sub': '再展开背后的论文与概念。',
-        'cs': '计算机科学', 'physics': '物理学',
-        'ml': '机器学习', 'qi': '量子信息', 'sp': '统计物理',
-        'pa': '项目 A', 'pb': '项目 B',
+        'field_a': '你的领域', 'field_b': '相关领域',
+        'direction_a': '研究方向 A', 'direction_b': '研究方向 B', 'direction_c': '研究方向 C',
+        'pa': '比较两种方法', 'pb': '检验一个假设',
+        'paper_a': '论文 A', 'paper_b': '论文 B', 'shared': '共享概念',
         'field': '领域', 'direction': '潜在研究方向', 'project': '具体项目',
         'paper': '论文', 'concept': '概念',
         'bridge': '候选联系', 'same': '两个视图，同一套相互连接的笔记。',
@@ -83,10 +85,10 @@ def build(locale):
     # One model, two views. Left view suppresses papers/concepts rather than
     # inventing another taxonomy. All nodes and relationships are fictional.
     macro = [
-        (170, 366, 'field', 'cs'), (380, 366, 'field', 'physics'),
-        (154, 505, 'direction', 'ml'), (278, 505, 'direction', 'qi'),
-        (355, 625, 'direction', 'sp'),
-        (139, 721, 'project', 'pa'), (301, 745, 'project', 'pb'),
+        (170, 366, 'field', 'field_a'), (380, 366, 'field', 'field_b'),
+        (154, 505, 'direction', 'direction_a'), (278, 505, 'direction', 'direction_b'),
+        (355, 625, 'direction', 'direction_c'),
+        (166, 711, 'project', 'pa'), (301, 758, 'project', 'pb'),
     ]
     edges = [(0, 2), (1, 3), (1, 4), (2, 5), (3, 5), (3, 6), (4, 6)]
     for a,b in edges:
@@ -97,16 +99,16 @@ def build(locale):
         circle(x,y,11 if role=='field' else 9,role,True)
         offset = -23 if role=='field' else 36
         # The three direction labels are staggered to preserve readable gaps.
-        if key=='qi':
+        if key=='direction_b':
             label(x+6,y-25,t[key],20,'middle')
         else:
             label(x,y+offset,t[key],20,'middle')
 
     # Pinned macro nodes preserve the branch identity across both views.
     full_macro = [
-        (725,354,'field','cs'), (1345,371,'field','physics'),
-        (810,486,'direction','ml'), (1087,544,'direction','qi'),
-        (1300,648,'direction','sp'),
+        (725,354,'field','field_a'), (1345,371,'field','field_b'),
+        (810,486,'direction','direction_a'), (1087,544,'direction','direction_b'),
+        (1300,648,'direction','direction_c'),
         (875,688,'project','pa'), (1136,726,'project','pb'),
     ]
     nodes = [{'x':x,'y':y,'role':role,'r':12 if role=='field' else 10,'key':key}
@@ -153,22 +155,32 @@ def build(locale):
         links.append((concept_ids[a],concept_ids[b],'normal'))
     for p,cs in [(5,[2,5,8]),(6,[9,14,19])]:
         for c in cs: links.append((p,concept_ids[c],'normal'))
+    example_ids = []
+    for x,y,role,key in [(842,350,'paper','paper_a'), (1183,344,'paper','paper_b'),
+                         (1000,630,'concept','shared')]:
+        example_ids.append(len(nodes))
+        nodes.append({'x':x,'y':y,'role':role,'r':6 if role=='paper' else 9})
+    for a,b in [(example_ids[0],example_ids[2]),(example_ids[1],example_ids[2]),(example_ids[2],5)]:
+        links.append((a,b,'example'))
     for a,b,kind in links:
         n,m = nodes[a],nodes[b]
-        line(n['x'],n['y'],m['x'],m['y'],opacity=.4 if kind=='macro' else .23,
-             width=1.7 if kind=='macro' else .9)
+        line(n['x'],n['y'],m['x'],m['y'],opacity=.55 if kind=='example' else (.4 if kind=='macro' else .23),
+             width=1.5 if kind in ('macro','example') else .9)
     # Dashed sample opportunity; it is deliberately not a proved transfer.
     line(*full_macro[2][:2],*full_macro[3][:2],color=PALETTE['direction'],opacity=.65,width=1.7,dash='5 6')
     for n in sorted(nodes,key=lambda n: n['r']):
         circle(n['x'],n['y'],n['r'],n['role'],n.get('key') is not None)
     for x,y,role,key in full_macro:
-        if key in ('cs','physics'):
+        if key in ('field_a','field_b'):
             label(x,y-24,t[key],22,'middle')
         elif key in ('pa','pb'):
             label(x+18,y+7,t[key],21)
-        elif key=='ml': label(x-18,y-23,t[key],21,'end')
-        elif key=='qi': label(x+21,y+7,t[key],21)
+        elif key=='direction_a': label(x-18,y-23,t[key],21,'end')
+        elif key=='direction_b': label(x+21,y+7,t[key],21)
         else: label(x+19,y+8,t[key],21)
+    label(842,329,t['paper_a'],20,'middle')
+    label(1183,323,t['paper_b'],20,'middle')
+    label(1000,609,t['shared'],20,'middle')
     line(48,850,1552,850,opacity=.35)
     legend = [('field',76),('direction',290),('project',640),('paper',882),('concept',1097)]
     for role,x in legend:

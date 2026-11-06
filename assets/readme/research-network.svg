@@ -18,40 +18,40 @@
 <line x1="170.0" y1="366.0" x2="154.0" y2="505.0" stroke="#6e7b8f" opacity="0.5" stroke-width="2"/>
 <line x1="380.0" y1="366.0" x2="278.0" y2="505.0" stroke="#6e7b8f" opacity="0.5" stroke-width="2"/>
 <line x1="380.0" y1="366.0" x2="355.0" y2="625.0" stroke="#6e7b8f" opacity="0.5" stroke-width="2"/>
-<line x1="154.0" y1="505.0" x2="139.0" y2="721.0" stroke="#6e7b8f" opacity="0.5" stroke-width="2"/>
-<line x1="278.0" y1="505.0" x2="139.0" y2="721.0" stroke="#6e7b8f" opacity="0.5" stroke-width="2"/>
-<line x1="278.0" y1="505.0" x2="301.0" y2="745.0" stroke="#6e7b8f" opacity="0.5" stroke-width="2"/>
-<line x1="355.0" y1="625.0" x2="301.0" y2="745.0" stroke="#6e7b8f" opacity="0.5" stroke-width="2"/>
+<line x1="154.0" y1="505.0" x2="166.0" y2="711.0" stroke="#6e7b8f" opacity="0.5" stroke-width="2"/>
+<line x1="278.0" y1="505.0" x2="166.0" y2="711.0" stroke="#6e7b8f" opacity="0.5" stroke-width="2"/>
+<line x1="278.0" y1="505.0" x2="301.0" y2="758.0" stroke="#6e7b8f" opacity="0.5" stroke-width="2"/>
+<line x1="355.0" y1="625.0" x2="301.0" y2="758.0" stroke="#6e7b8f" opacity="0.5" stroke-width="2"/>
 <line x1="154.0" y1="505.0" x2="278.0" y2="505.0" stroke="#E3B34F" opacity="0.6" stroke-width="1.7" stroke-dasharray="5 6"/>
 <text x="197" y="464" font-size="17" fill="#c7a65d" font-weight="400" text-anchor="middle" >candidate connection</text>
 <circle cx="170.0" cy="366.0" r="20" fill="#5B9FE6" opacity=".07"/>
 <circle cx="170.0" cy="366.0" r="11" fill="#5B9FE6"/>
-<text x="170" y="343" font-size="20" fill="#d6dce6" font-weight="500" text-anchor="middle" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Computer Science</text>
+<text x="170" y="343" font-size="20" fill="#d6dce6" font-weight="500" text-anchor="middle" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Your field</text>
 <circle cx="380.0" cy="366.0" r="20" fill="#5B9FE6" opacity=".07"/>
 <circle cx="380.0" cy="366.0" r="11" fill="#5B9FE6"/>
-<text x="380" y="343" font-size="20" fill="#d6dce6" font-weight="500" text-anchor="middle" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Physics</text>
+<text x="380" y="343" font-size="20" fill="#d6dce6" font-weight="500" text-anchor="middle" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Related field</text>
 <circle cx="154.0" cy="505.0" r="18" fill="#E3B34F" opacity=".07"/>
 <circle cx="154.0" cy="505.0" r="9" fill="#E3B34F"/>
-<text x="154" y="541" font-size="20" fill="#d6dce6" font-weight="500" text-anchor="middle" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Machine Learning</text>
+<text x="154" y="541" font-size="20" fill="#d6dce6" font-weight="500" text-anchor="middle" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Direction A</text>
 <circle cx="278.0" cy="505.0" r="18" fill="#E3B34F" opacity=".07"/>
 <circle cx="278.0" cy="505.0" r="9" fill="#E3B34F"/>
-<text x="284" y="480" font-size="20" fill="#d6dce6" font-weight="500" text-anchor="middle" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Quantum Information</text>
+<text x="284" y="480" font-size="20" fill="#d6dce6" font-weight="500" text-anchor="middle" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Direction B</text>
 <circle cx="355.0" cy="625.0" r="18" fill="#E3B34F" opacity=".07"/>
 <circle cx="355.0" cy="625.0" r="9" fill="#E3B34F"/>
-<text x="355" y="661" font-size="20" fill="#d6dce6" font-weight="500" text-anchor="middle" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Statistical Physics</text>
-<circle cx="139.0" cy="721.0" r="18" fill="#E57D86" opacity=".07"/>
-<circle cx="139.0" cy="721.0" r="9" fill="#E57D86"/>
-<text x="139" y="757" font-size="20" fill="#d6dce6" font-weight="500" text-anchor="middle" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Project A</text>
-<circle cx="301.0" cy="745.0" r="18" fill="#E57D86" opacity=".07"/>
-<circle cx="301.0" cy="745.0" r="9" fill="#E57D86"/>
-<text x="301" y="781" font-size="20" fill="#d6dce6" font-weight="500" text-anchor="middle" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Project B</text>
-<line x1="725.0" y1="354.0" x2="810.0" y2="486.0" stroke="#6e7b8f" opacity="0.4" stroke-width="1.7"/>
-<line x1="1345.0" y1="371.0" x2="1087.0" y2="544.0" stroke="#6e7b8f" opacity="0.4" stroke-width="1.7"/>
-<line x1="1345.0" y1="371.0" x2="1300.0" y2="648.0" stroke="#6e7b8f" opacity="0.4" stroke-width="1.7"/>
-<line x1="810.0" y1="486.0" x2="875.0" y2="688.0" stroke="#6e7b8f" opacity="0.4" stroke-width="1.7"/>
-<line x1="1087.0" y1="544.0" x2="875.0" y2="688.0" stroke="#6e7b8f" opacity="0.4" stroke-width="1.7"/>
-<line x1="1087.0" y1="544.0" x2="1136.0" y2="726.0" stroke="#6e7b8f" opacity="0.4" stroke-width="1.7"/>
-<line x1="1300.0" y1="648.0" x2="1136.0" y2="726.0" stroke="#6e7b8f" opacity="0.4" stroke-width="1.7"/>
+<text x="355" y="661" font-size="20" fill="#d6dce6" font-weight="500" text-anchor="middle" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Direction C</text>
+<circle cx="166.0" cy="711.0" r="18" fill="#E57D86" opacity=".07"/>
+<circle cx="166.0" cy="711.0" r="9" fill="#E57D86"/>
+<text x="166" y="747" font-size="20" fill="#d6dce6" font-weight="500" text-anchor="middle" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Compare approaches</text>
+<circle cx="301.0" cy="758.0" r="18" fill="#E57D86" opacity=".07"/>
+<circle cx="301.0" cy="758.0" r="9" fill="#E57D86"/>
+<text x="301" y="794" font-size="20" fill="#d6dce6" font-weight="500" text-anchor="middle" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Test an assumption</text>
+<line x1="725.0" y1="354.0" x2="810.0" y2="486.0" stroke="#6e7b8f" opacity="0.4" stroke-width="1.5"/>
+<line x1="1345.0" y1="371.0" x2="1087.0" y2="544.0" stroke="#6e7b8f" opacity="0.4" stroke-width="1.5"/>
+<line x1="1345.0" y1="371.0" x2="1300.0" y2="648.0" stroke="#6e7b8f" opacity="0.4" stroke-width="1.5"/>
+<line x1="810.0" y1="486.0" x2="875.0" y2="688.0" stroke="#6e7b8f" opacity="0.4" stroke-width="1.5"/>
+<line x1="1087.0" y1="544.0" x2="875.0" y2="688.0" stroke="#6e7b8f" opacity="0.4" stroke-width="1.5"/>
+<line x1="1087.0" y1="544.0" x2="1136.0" y2="726.0" stroke="#6e7b8f" opacity="0.4" stroke-width="1.5"/>
+<line x1="1300.0" y1="648.0" x2="1136.0" y2="726.0" stroke="#6e7b8f" opacity="0.4" stroke-width="1.5"/>
 <line x1="810.0" y1="486.0" x2="862.8" y2="508.0" stroke="#6e7b8f" opacity="0.23" stroke-width="0.9"/>
 <line x1="810.0" y1="486.0" x2="824.4" y2="572.2" stroke="#6e7b8f" opacity="0.23" stroke-width="0.9"/>
 <line x1="810.0" y1="486.0" x2="750.1" y2="607.7" stroke="#6e7b8f" opacity="0.23" stroke-width="0.9"/>
@@ -337,6 +337,9 @@
 <line x1="1136.0" y1="726.0" x2="1016.1" y2="570.4" stroke="#6e7b8f" opacity="0.23" stroke-width="0.9"/>
 <line x1="1136.0" y1="726.0" x2="1310.9" y2="724.1" stroke="#6e7b8f" opacity="0.23" stroke-width="0.9"/>
 <line x1="1136.0" y1="726.0" x2="1380.8" y2="578.6" stroke="#6e7b8f" opacity="0.23" stroke-width="0.9"/>
+<line x1="842.0" y1="350.0" x2="1000.0" y2="630.0" stroke="#6e7b8f" opacity="0.55" stroke-width="1.5"/>
+<line x1="1183.0" y1="344.0" x2="1000.0" y2="630.0" stroke="#6e7b8f" opacity="0.55" stroke-width="1.5"/>
+<line x1="1000.0" y1="630.0" x2="875.0" y2="688.0" stroke="#6e7b8f" opacity="0.55" stroke-width="1.5"/>
 <line x1="810.0" y1="486.0" x2="1087.0" y2="544.0" stroke="#E3B34F" opacity="0.65" stroke-width="1.7" stroke-dasharray="5 6"/>
 <circle cx="734.6" cy="632.3" r="3" fill="#5AB8A0"/>
 <circle cx="836.7" cy="493.8" r="3" fill="#5AB8A0"/>
@@ -450,6 +453,8 @@
 <circle cx="1219.4" cy="705.5" r="6" fill="#AE8CDB"/>
 <circle cx="1157.5" cy="618.6" r="6" fill="#AE8CDB"/>
 <circle cx="1192.5" cy="534.0" r="6" fill="#AE8CDB"/>
+<circle cx="842.0" cy="350.0" r="6" fill="#5AB8A0"/>
+<circle cx="1183.0" cy="344.0" r="6" fill="#5AB8A0"/>
 <circle cx="862.8" cy="508.0" r="8" fill="#AE8CDB"/>
 <circle cx="750.1" cy="607.7" r="8" fill="#AE8CDB"/>
 <circle cx="676.6" cy="544.1" r="8" fill="#AE8CDB"/>
@@ -458,6 +463,7 @@
 <circle cx="1302.3" cy="532.3" r="8" fill="#AE8CDB"/>
 <circle cx="1380.8" cy="578.6" r="8" fill="#AE8CDB"/>
 <circle cx="1388.6" cy="659.8" r="8" fill="#AE8CDB"/>
+<circle cx="1000.0" cy="630.0" r="9" fill="#AE8CDB"/>
 <circle cx="810.0" cy="486.0" r="19" fill="#E3B34F" opacity=".07"/>
 <circle cx="810.0" cy="486.0" r="10" fill="#E3B34F"/>
 <circle cx="1087.0" cy="544.0" r="19" fill="#E3B34F" opacity=".07"/>
@@ -475,13 +481,16 @@
 <circle cx="725.0" cy="354.0" r="12" fill="#5B9FE6"/>
 <circle cx="1345.0" cy="371.0" r="21" fill="#5B9FE6" opacity=".07"/>
 <circle cx="1345.0" cy="371.0" r="12" fill="#5B9FE6"/>
-<text x="725" y="330" font-size="22" fill="#d6dce6" font-weight="500" text-anchor="middle" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Computer Science</text>
-<text x="1345" y="347" font-size="22" fill="#d6dce6" font-weight="500" text-anchor="middle" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Physics</text>
-<text x="792" y="463" font-size="21" fill="#d6dce6" font-weight="500" text-anchor="end" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Machine Learning</text>
-<text x="1108" y="551" font-size="21" fill="#d6dce6" font-weight="500" text-anchor="start" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Quantum Information</text>
-<text x="1319" y="656" font-size="21" fill="#d6dce6" font-weight="500" text-anchor="start" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Statistical Physics</text>
-<text x="893" y="695" font-size="21" fill="#d6dce6" font-weight="500" text-anchor="start" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Project A</text>
-<text x="1154" y="733" font-size="21" fill="#d6dce6" font-weight="500" text-anchor="start" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Project B</text>
+<text x="725" y="330" font-size="22" fill="#d6dce6" font-weight="500" text-anchor="middle" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Your field</text>
+<text x="1345" y="347" font-size="22" fill="#d6dce6" font-weight="500" text-anchor="middle" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Related field</text>
+<text x="792" y="463" font-size="21" fill="#d6dce6" font-weight="500" text-anchor="end" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Direction A</text>
+<text x="1108" y="551" font-size="21" fill="#d6dce6" font-weight="500" text-anchor="start" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Direction B</text>
+<text x="1319" y="656" font-size="21" fill="#d6dce6" font-weight="500" text-anchor="start" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Direction C</text>
+<text x="893" y="695" font-size="21" fill="#d6dce6" font-weight="500" text-anchor="start" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Compare approaches</text>
+<text x="1154" y="733" font-size="21" fill="#d6dce6" font-weight="500" text-anchor="start" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Test an assumption</text>
+<text x="842" y="329" font-size="20" fill="#d6dce6" font-weight="500" text-anchor="middle" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Paper A</text>
+<text x="1183" y="323" font-size="20" fill="#d6dce6" font-weight="500" text-anchor="middle" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Paper B</text>
+<text x="1000" y="609" font-size="20" fill="#d6dce6" font-weight="500" text-anchor="middle" paint-order="stroke" stroke="#171c24" stroke-width="7" stroke-linejoin="round">Shared concept</text>
 <line x1="48.0" y1="850.0" x2="1552.0" y2="850.0" stroke="#6e7b8f" opacity="0.35" stroke-width="1.2"/>
 <circle cx="76.0" cy="887.0" r="7" fill="#5B9FE6"/>
 <text x="95" y="895" font-size="23" fill="#c6cfdb" font-weight="400" text-anchor="start" >Fields</text>
