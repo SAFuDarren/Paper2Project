@@ -13,7 +13,7 @@
   <a href="#quickstart">Quickstart</a> · <a href="#how-it-is-organized">Workspace</a> · <a href="#make-it-yours">Preferences</a> · <a href="README.zh-CN.md">简体中文</a>
 </p>
 
-![An illustrative research workspace: a focused Research Map beside a Full Network of papers, concepts, directions and projects.](assets/readme/research-network.en.abdf69850e37.svg)
+![An illustrative research workspace: a focused Research Map beside a Full Network of papers, concepts, directions and projects.](assets/readme/research-network.en.275811b87765.svg)
 
 *Illustrative network with synthetic notes and links. This is a visual example of the organization, not an application screenshot. Real research connections require source support.*
 
@@ -37,7 +37,7 @@ Use the same recognized academic names and role colors in both views: **blue** f
 
 ### A simple example
 
-Two papers approach the same question differently. Link **Paper A** and **Paper B** through a **shared concept** in Library, then open **Compare approaches** as a project to record your question, method and findings. **Test an assumption** can become a linked follow-up project.
+**Paper A** and **Paper B** link to a **shared concept** in Library. **Project A** and **Project B** can both reference those notes while keeping their own problem, methods, results and extensions in Projects.
 
 The diagram uses neutral field and direction labels so you can imagine your own research in their place. Use your discipline's recognized names in the actual workspace.
 
