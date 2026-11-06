@@ -246,7 +246,7 @@ def init_workspace(args):
     root.mkdir(parents=True,exist_ok=True)
     for relative,content in planned.items():
         dest=root/relative;dest.parent.mkdir(parents=True,exist_ok=True)
-        with dest.open('x',encoding='utf-8') as out:out.write(content)
+        with dest.open('x',encoding='utf-8',newline='') as out:out.write(content)
     print(dump({'status':'created','root':str(root),'written':list(planned)}));return 0
 
 
@@ -492,7 +492,7 @@ def preferences_command(args):
     if args.output:
         dest=Path(args.output).expanduser().absolute();no_symlink_root(dest.parent)
         if dest==path or dest.exists() or dest.is_symlink():raise InputError('Choose a new profile snapshot path outside the live configuration.')
-        with dest.open('x',encoding='utf-8') as out:out.write(dump(profile)+'\n')
+        with dest.open('x',encoding='utf-8',newline='') as out:out.write(dump(profile)+'\n')
         result.update(status='profile_snapshot_saved',output=str(dest))
     elif args.scope=='task':
         raise InputError('Task overrides are read-only; use preview or an explicit --output snapshot.')
@@ -526,7 +526,7 @@ def render_command(args):
     result={'status':'preview','path':str(dest),'languages':profile['note_languages'],'markdown':text}
     if args.apply:
         dest.parent.mkdir(parents=True,exist_ok=True)
-        with dest.open('x',encoding='utf-8') as out:out.write(text)
+        with dest.open('x',encoding='utf-8',newline='') as out:out.write(text)
         if dest.read_text(encoding='utf-8')!=text:raise InputError('Note readback failed.')
         result={'status':'rendered','path':str(dest),'languages':profile['note_languages'],'content_sha256':digest(text.encode('utf-8'))}
     print(dump(result));return 0

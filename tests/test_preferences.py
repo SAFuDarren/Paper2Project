@@ -53,7 +53,10 @@ class PreferencesTests(unittest.TestCase):
 
     def render(self,kind,card,path,**kwargs):
         data=self.put_json(self.base/'card.json',card)
-        return self.cli('render','--root',self.root,'--kind',kind,'--input',data,'--output',path,'--apply',**kwargs)
+        result=self.cli('render','--root',self.root,'--kind',kind,'--input',data,'--output',path,'--apply',**kwargs)
+        if result.get('status')=='rendered':
+            self.assertEqual(result['content_sha256'],hashlib.sha256(Path(result['path']).read_bytes()).hexdigest())
+        return result
 
     def test_memory_beats_conversation_but_saved_and_explicit_win(self):
         fresh=self.prefs({'context':{'note_languages':['ar']},'memory':{'note_languages':['ja'],'response_language':'fr'}})
