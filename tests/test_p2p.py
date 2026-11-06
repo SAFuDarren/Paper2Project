@@ -337,7 +337,10 @@ class WorkspaceTests(unittest.TestCase):
     def test_windows_line_endings_preserve_export_identity(self):
         self.initialize()
         p = self.paper()
-        p.write_bytes(p.read_bytes().replace(b'\n', b'\r\n'))
+        # Start from normalized LF on every host; Windows text writes already
+        # contain CRLF and must not become the malformed CRCRLF sequence.
+        p.write_bytes(p.read_bytes().replace(b'\r\n', b'\n').replace(b'\n', b'\r\n'))
+        self.assertNotIn(b'\r\r\n',p.read_bytes())
         out = self.base/'windows.jsonl'
         self.cli('export', '--root', str(self.root), '--kind', 'paper', '--output', str(out))
         doc = json.loads(out.read_text().splitlines()[1])
