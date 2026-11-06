@@ -1,0 +1,23 @@
+{
+  "id": "example-paper-001",
+  "title": "Synthetic Workflow Example",
+  "source_id": "example:workflow-fixture",
+  "subfield": "Sequence Models",
+  "metadata": {
+    "paper": "https://example.org/paper",
+    "version": "Fictional example only",
+    "field": "Machine Learning"
+  },
+  "content": {
+    "fr": {
+      "summary": "Exemple fictif de gestion documentaire.",
+      "reading_scope": "Aucun article réel lu ; exemple de format uniquement.",
+      "question": "Vérifier le format et les liens d’une fiche.",
+      "setup": "Données entièrement fictives ; aucune hypothèse scientifique.",
+      "method": "Fournir les champs sémantiques puis générer les libellés localisés.",
+      "results": "Aucun résultat de recherche ; vérifier le logiciel séparément.",
+      "argument": "Champs fournis → rendu → contrôle de structure.",
+      "connection": "Illustration du workflow, sans contribution scientifique revendiquée."
+    }
+  }
+}

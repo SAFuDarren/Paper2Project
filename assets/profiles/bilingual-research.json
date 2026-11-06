@@ -1,0 +1,22 @@
+{
+  "language": "en-zh",
+  "context": {
+    "management_entry": null,
+    "maintenance_entry": null,
+    "task_template": null,
+    "maintenance_directory": null
+  },
+  "preferences": {
+    "preserve_existing": true,
+    "filename_style": "English descriptive names; recognized subfield - short paper title; one canonical project home.",
+    "note_detail": "Concise but method-complete: question, assumptions, method, evidence, argument chain and relation; actual reading scope and missing bridge.",
+    "navigation_style": "Library/Projects separation, typed project records, full-path links, a branch-level Research Map and a detailed Full Network; no empty records or extra reading layers."
+  },
+  "palette": {
+    "field": "#5B9FE6",
+    "direction": "#E3B34F",
+    "project": "#E57D86",
+    "paper": "#5AB8A0",
+    "concept": "#AE8CDB"
+  }
+}

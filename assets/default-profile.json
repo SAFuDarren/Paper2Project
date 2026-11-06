@@ -1,0 +1,70 @@
+{
+  "schema_version": 2,
+  "research_scope": "",
+  "current_aim": "",
+  "language": "en",
+  "vault_prefix": "",
+  "context": {
+    "materials": [],
+    "project_overviews": [],
+    "management_entry": null,
+    "maintenance_entry": null,
+    "task_template": null,
+    "maintenance_directory": null
+  },
+  "preferences": {
+    "preserve_existing": true,
+    "filename_style": null,
+    "note_detail": null,
+    "navigation_style": null
+  },
+  "taxonomy": [],
+  "palette": {
+    "field": "#5B9FE6",
+    "direction": "#E3B34F",
+    "project": "#E57D86",
+    "paper": "#5AB8A0",
+    "concept": "#AE8CDB"
+  },
+  "extensions": {
+    "embedding": {
+      "enabled": false,
+      "provider": null
+    },
+    "rag": {
+      "enabled": false,
+      "provider": null
+    },
+    "agent": {
+      "enabled": false,
+      "provider": null
+    },
+    "knowledge_store": {
+      "enabled": false,
+      "provider": null
+    }
+  },
+  "note_languages": [
+    "en"
+  ],
+  "response_language": "auto",
+  "filename_language": "original",
+  "layout": {
+    "home": "Academic Home",
+    "library": "Library",
+    "projects": "Projects",
+    "papers": "Papers",
+    "concepts": "Concepts",
+    "direction_suffix": "Research Directions",
+    "groups": {
+      "problem": "Problem",
+      "methods": "Methods",
+      "results": "Results",
+      "extensions": "Extensions"
+    }
+  },
+  "locale_overrides": {},
+  "preference_sources": {},
+  "previous_layouts": [],
+  "previous_note_languages": []
+}

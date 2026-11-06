@@ -1,0 +1,14 @@
+{
+  "memory": {
+    "response_language": "fr",
+    "note_languages": [
+      "fr"
+    ],
+    "preferences": {
+      "note_detail": "Concise, with method mechanics and argument chain."
+    }
+  },
+  "explicit": {
+    "filename_language": "original"
+  }
+}

@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.DS_Store
+.venv/
+*.jsonl
+.paper2project.json
+.paper2project-history/
+/local.json
+/profile.json
+/signals.json
