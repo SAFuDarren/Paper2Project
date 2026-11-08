@@ -85,6 +85,10 @@ The project home is a short index. Paper notes stay in Library and can support m
 
 On first use, the agent reuses available context and relevant memory, proposes a suitable structure and asks only for consequential missing choices. Downloading the repository itself runs no setup. Existing workspaces follow a preservation and link-checking workflow; the initializer is for an empty workspace.
 
+## Discover before adding
+
+Ask for more research directions, related papers, or application cases for a project. Paper2Project checks the local Library and active review packets, and renders one complete chat card for each new source. Existing sources can be brief. Choose materials and project connections separately before any addition. See [discovery and review](references/discovery.md).
+
 ## Make it yours
 
 Set response language, ordered note languages and filename language separately. The host LLM supplies preferences from context or memory it actually has; the program validates and saves the selected settings in `.paper2project.json`.

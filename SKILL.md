@@ -1,6 +1,6 @@
 ---
 name: paper2project
-description: Design and maintain a connected Markdown or Obsidian research workspace, linking source-grounded papers and concepts to potential directions and uniquely organized projects. Use for context-aware setup, literature organization, adjustable preferences, multilingual notes, research maps and project handoff.
+description: Design and maintain a connected Markdown or Obsidian research workspace, linking source-grounded papers and concepts to potential directions and uniquely organized projects. Use for context-aware setup, project literature discovery, adjustable preferences, multilingual notes, research maps and project handoff.
 ---
 
 # Paper2Project
@@ -20,6 +20,7 @@ Connect existing knowledge to research you can develop. Keep Library for papers/
 | Work | Read only what is needed |
 |---|---|
 | First use, host context/memory or a preference change | [onboarding.md](references/onboarding.md) |
+| Find related work or applications for a project | [discovery.md](references/discovery.md) |
 | Paper reading, concepts, directions and projects | [workflow.md](references/workflow.md) |
 | Classification, names, folders or migration | [structure-and-names.md](references/structure-and-names.md) |
 | Relations, backlinks, graph scopes and colors | [links-and-graphs.md](references/links-and-graphs.md) |
@@ -39,7 +40,7 @@ Connect existing knowledge to research you can develop. Keep Library for papers/
 
 Python 3.10+ standard library only. Run from this folder or use absolute script paths. See `python scripts/p2p.py --help` and the [onboarding commands](references/onboarding.md).
 
-`inspect/check/locales` and preference/render previews are read-only. `init --apply` creates only a fresh empty root; `render --apply` creates a new note only. `preferences --scope workspace --apply` changes only the selected profile with the previewed hash and a backup. Explicit output snapshots and `export` never overwrite existing files.
+`inspect/check/locales`, discovery inventory and review, and preference/render previews are read-only. Discovery staging writes only an explicitly named candidate packet. `init --apply` creates only a fresh empty root; `render --apply` creates a new note only. `preferences --scope workspace --apply` changes only the selected profile with the previewed hash and a backup. Explicit output snapshots and `export` never overwrite existing files.
 
 Eight built-in label packs cover English, simplified/traditional Chinese, Spanish, French, German, Japanese and Arabic. For another language, have the LLM fill a complete `locale_overrides` pack using `locales --template <tag>`, validate/save it, then render. Do not silently substitute English. Each new note declares its own languages; old en/en-zh workspaces remain readable.
 
