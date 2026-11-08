@@ -21,6 +21,7 @@ if __name__ == '__main__' and sys.getfilesystemencoding().lower() in ('ascii', '
 
 import profiles
 import i18n
+import discovery
 
 for stream in (sys.stdout, sys.stderr):
     if hasattr(stream, "reconfigure"):
@@ -200,22 +201,20 @@ def anchor_exists(path, anchor):
     return anchor in headings or anchor in {heading_slug(h) for h in headings}
 
 
-def source_identity(text):
+def source_value(text):
     front, body = split_front(text)
     explicit = scalar(front, 'source_id')
     if explicit:
-        value = explicit
-    else:
-        m = re.search(r'^\*\*Paper:\*\*\s*(.+)', body, re.M)
-        line = m[1] if m else ''
-        url = re.search(r'https?://[^\s<>)]+', line)
-        value = url[0] if url else line
-    value = value.strip('<>').rstrip('/').lower()
-    value = re.sub(r'^https?://(?:dx\.)?doi\.org/', 'doi:', value)
-    value = re.sub(r'^https?://arxiv\.org/(?:abs|pdf)/', 'arxiv:', value)
-    if value.startswith('arxiv:'):
-        value = re.sub(r'(?:v\d+)?(?:\.pdf)?$', '', value)
-    return value or None
+        return explicit
+    m = re.search(r'^\*\*Paper:\*\*\s*(.+)', body, re.M)
+    line = m[1] if m else ''
+    url = re.search(r'https?://[^\s<>)]+', line)
+    return url[0] if url else line
+
+
+def source_identity(text):
+    value = source_value(text)
+    return discovery.source_reference(value)[0] or value.strip('<>').rstrip('/').casefold() or None
 
 
 def query(prefix, full=False):
@@ -552,6 +551,97 @@ def locales_command(args):
     print(dump(result));return 0
 
 
+
+def discovery_snapshot(root, profile):
+    vault = vault_base(root, profile['vault_prefix'])
+    papers, projects, directions = [], {}, {x['direction'] for x in profile['taxonomy']}
+    note_hashes = {}
+    for area in ('library', 'projects'):
+        for folder in sorted(set(layout_values(profile, area))):
+            base = root / folder
+            if base.is_symlink():
+                raise InputError('Discovery does not follow a symlinked role folder.')
+            for path in markdown_files(base):
+                text = path.read_text(encoding='utf-8')
+                kind = role(text, path, root)
+                rel = path.relative_to(root).as_posix()
+                body = visible_text(split_front(text)[1])
+                title_match = re.search(r'^#\s+(.+?)\s*$', body, re.M)
+                title = title_match[1] if title_match else path.stem
+                if area == 'projects' and kind == 'direction':
+                    directions.add(path.parent.name)
+                elif area == 'projects' and kind == 'project':
+                    projects[rel] = title
+                    note_hashes[rel] = digest(text.encode('utf-8'))
+                elif area == 'library' and kind == 'paper':
+                    note_hashes[rel] = digest(text.encode('utf-8'))
+                    key, version = discovery.source_reference(source_value(text))
+                    pdfs = set()
+                    for link in links(text):
+                        if not link['target'].lower().endswith('.pdf'):
+                            continue
+                        pdf = resolve_link(link, path, vault)
+                        if pdf.is_file():
+                            pdfs.add(pdf.resolve().relative_to(vault.resolve()).as_posix())
+                    papers.append({'title': title, 'path': rel, 'keys': [key] if key else [],
+                                   'versions': [version] if version else [], 'pdfs': sorted(pdfs)})
+    return {'papers': papers, 'projects': projects, 'directions': sorted(directions), 'note_hashes': note_hashes}
+
+
+def read_discovery_packet(path):
+    raw = Path(path).read_bytes()
+    packet = json.loads(raw)
+    if not isinstance(packet, dict) or packet.get('schema_version') != 1:
+        raise InputError('Expected a discovery review packet.')
+    for key in ('materials', 'connections'):
+        rows = packet.get(key)
+        if not isinstance(rows, dict) or not all(isinstance(row, dict) for row in rows.values()):
+            raise InputError(f'Invalid packet {key} records.')
+    return raw, packet
+
+
+def discovery_command(args):
+    root = no_symlink_root(Path(args.root))
+    if not root.is_dir():
+        raise InputError('Workspace root does not exist.')
+    profile = profile_at(root)
+    snapshot = discovery_snapshot(root, profile)
+    catalog_hash = digest(json.dumps(snapshot, ensure_ascii=False, sort_keys=True).encode('utf-8'))
+    if args.command == 'review-discovery':
+        raw, packet = read_discovery_packet(args.packet)
+        decisions = json.loads(Path(args.decisions).read_bytes())
+        plan = discovery.review(packet, decisions, digest(raw), catalog_hash)
+        print(dump({'status': 'review_plan', **plan}))
+        return 0
+
+    data = json.loads(Path(args.input).read_bytes())
+    prior = [read_discovery_packet(path)[1] for path in dict.fromkeys(args.prior)]
+    if not args.stage:
+        print(dump({'status': 'inventory', 'items': discovery.inventory(data, snapshot, prior)}))
+        return 0
+
+    language = data.get('language', profile['response_language'])
+    if language == 'auto':
+        raise InputError('Supply the response language for this task when the profile uses auto.')
+    rows, markdown, packet = discovery.build(data, snapshot, prior, language, catalog_hash)
+    result = {'status': 'no_new_candidates', 'language': language, 'items': rows, 'markdown': markdown}
+    if packet['materials'] or packet['connections']:
+        dest = no_symlink_root(Path(args.stage))
+        if dest.suffix.lower() != '.json' or dest == root / CONFIG:
+            raise InputError('Choose a new JSON path for the review packet.')
+        if dest.is_relative_to(root) and dest.relative_to(root).parts[0] in (
+                layout_values(profile, 'library') | layout_values(profile, 'projects')):
+            raise InputError('Keep review packets outside the Library and Projects.')
+        payload = (dump(packet) + '\n').encode('utf-8')
+        with dest.open('xb') as out:
+            out.write(payload)
+        if dest.read_bytes() != payload:
+            raise InputError('Review packet readback failed.')
+        result.update(status='staged', packet=str(dest), packet_sha256=digest(payload))
+    print(dump(result))
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
@@ -572,12 +662,18 @@ def main(argv=None):
     cmd=sub.add_parser('render',help='Render supplied source-grounded content with localized templates.')
     cmd.add_argument('--root',required=True);cmd.add_argument('--kind',choices=tuple(i18n.SPECS),required=True)
     cmd.add_argument('--input',required=True);cmd.add_argument('--output',required=True);cmd.add_argument('--profile');cmd.add_argument('--apply',action='store_true')
+    cmd=sub.add_parser('discover',help='Inventory sources or stage a discovery review packet.')
+    cmd.add_argument('--root',required=True);cmd.add_argument('--input',required=True)
+    cmd.add_argument('--prior',action='append',default=[]);cmd.add_argument('--stage',metavar='PACKET')
+    cmd=sub.add_parser('review-discovery',help='Validate separate choices for material and connections.')
+    cmd.add_argument('--root',required=True);cmd.add_argument('--packet',required=True);cmd.add_argument('--decisions',required=True)
     cmd=sub.add_parser('locales');cmd.add_argument('--template')
     args = parser.parse_args(argv)
     try:
         return {'inspect': inspect_workspace, 'init': init_workspace,
                 'check': check_workspace, 'export': export_workspace,
-                'preferences':preferences_command,'render':render_command,'locales':locales_command}[args.command](args)
+                'preferences':preferences_command,'render':render_command,'locales':locales_command,
+                'discover':discovery_command,'review-discovery':discovery_command}[args.command](args)
     except (ValueError, OSError, TypeError, KeyError, UnicodeError) as ex:
         print(dump({'status': 'error', 'message': str(ex)}), file=sys.stderr)
         return 2

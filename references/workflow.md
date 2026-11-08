@@ -12,7 +12,7 @@ If the user wants positioning or proposal preparation, keep this separate from t
 
 Use available connected libraries and supplied materials first. For an explicit literature search, use current primary sources and report the actual search boundary: queries, sources/date, citation chains checked and unresolved leads. Expand along cited work, citing work, shared technical objects and competing approaches when they address the user's uncertainty. Do not claim an open-ended search is exhaustive.
 
-Deduplicate DOI/arXiv IDs and versions before creating a note. Preserve the full title and original landing page. Use the main research object to classify a paper, not its potential application to our project. Reading notes stay in Library even when multiple projects use them.
+For project discovery, use the [discovery workflow](discovery.md) to check known and pending work and render the first pass in chat. Deduplicate DOI/arXiv IDs and versions before creating a note. Preserve the full title and original landing page. Use the main research object to classify a paper, not its potential application to our project. Reading notes stay in Library even when multiple projects use them.
 
 ## 3. Read with enough method detail
 
