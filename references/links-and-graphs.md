@@ -10,7 +10,17 @@
 | Direction↔direction or project | A concrete shared task, method, resource, bottleneck or transfer interface; cite the literature fact, our relevance and missing step |
 | Home→internal record | Navigation; does not make each record a separate project |
 
-Do not infer edges from shared words, proximity in a folder, an embedding score, or a desire for a connected graph. Backlinks provide reverse navigation but do not add an unsupported interpretation.
+Do not infer edges from shared words, proximity in a folder, an embedding score, or a desire for a connected graph.
+
+Substantive connections are recorded, not hand-typed. The agent supplies a plan; the program writes one `<!-- p2p:relation <id> -->` block into both endpoints (other endpoint, literature, connection, missing step and supporting papers, in every note language) and records it in `.maintenance/relations.json`:
+
+```json
+{"relations": [{"id": "R1", "kind": "research", "a": "Projects/.../A/A.md", "b": "Projects/.../B/B.md",
+  "papers": ["Library/.../Papers/Subfield - Paper.md"],
+  "text": {"en": {"literature": "...", "connection": "...", "missing_step": "..."}}}]}
+```
+
+`kind: research` joins field, direction or project notes; `kind: concept` joins two concepts. Run `relate --plan relations.json`, then `--apply`. `check` verifies every registered block per language and warns about links between map notes or between concepts that are neither structural (field↔direction, direction↔its project homes) nor registered. Backlinks provide reverse navigation but do not add an unsupported interpretation.
 
 ## Link format
 

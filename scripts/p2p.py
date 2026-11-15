@@ -23,6 +23,10 @@ if __name__ == '__main__' and sys.getfilesystemencoding().lower() in ('ascii', '
 import profiles
 import i18n
 import discovery
+import pdfs
+import relations
+import results
+import state
 
 for stream in (sys.stdout, sys.stderr):
     if hasattr(stream, "reconfigure"):
@@ -393,6 +397,7 @@ def views_command(args):
 
 
 MANAGED = ('<!-- p2p:index -->', '<!-- /p2p:index -->')
+EVIDENCE = ('<!-- p2p:evidence -->', '<!-- /p2p:evidence -->')
 TAG_LINE = r'\s*#[\w/-]+(?:\s+#[\w/-]+)*\s*'
 
 
@@ -412,7 +417,7 @@ def note_title(text, path):
     return m[1] if m else path.stem
 
 
-def put_managed(text, contents):
+def put_managed(text, contents, marks=MANAGED):
     """Replace, or insert before the closing tag line, one managed block per language block."""
     newline = '\r\n' if '\r\n' in text else '\n'
     text = text.replace('\r\n', '\n')
@@ -421,11 +426,11 @@ def put_managed(text, contents):
     seps = list(re.finditer(r'^---[ \t]*$', body, re.M))
     cuts = [0, *[x for m in seps for x in (m.start(), m.end())], len(body)]
     segments = [body[cuts[i]:cuts[i+1]] for i in range(0, len(cuts), 2)]
-    pattern = re.escape(MANAGED[0]) + r'.*?' + re.escape(MANAGED[1])
+    pattern = re.escape(marks[0]) + r'.*?' + re.escape(marks[1])
     out = []
     for i, segment in enumerate(segments):
         lines = contents[i] if i < len(contents) else contents[0]
-        block = MANAGED[0] + '\n' + '\n'.join(lines) + ('\n' if lines else '') + MANAGED[1]
+        block = marks[0] + '\n' + '\n'.join(lines) + ('\n' if lines else '') + marks[1]
         if re.search(pattern, segment, re.S):
             segment = re.sub(pattern, lambda _: block, segment, count=1, flags=re.S)
         else:
@@ -701,6 +706,18 @@ def migrate_command(args):
             profiles.safe_name(part)
         moved[src.resolve()] = dst.resolve()
         pairs.append((src, dst))
+    # A registered original follows its paper note to the new field (rule-derived, not left to the agent).
+    register = pdfs.load_register(root)
+    for src, dst in list(pairs):
+        row = register['papers'].get(src.relative_to(root).as_posix()) if src.suffix.lower() == '.md' else None
+        for item in (row or {}).get('files', []):
+            old_pdf = (root / item['path']).resolve()
+            new_pdf = (dst.parent.parent / 'PDFs' / (dst.stem + old_pdf.suffix)).resolve()
+            if old_pdf.is_file() and old_pdf not in moved and new_pdf != old_pdf:
+                if new_pdf.exists() or new_pdf in moved.values():
+                    raise InputError('The original PDF of a moved note would collide: ' + new_pdf.relative_to(root.resolve()).as_posix())
+                moved[old_pdf] = new_pdf
+                pairs.append((old_pdf, new_pdf))
     occupied = {x.resolve() for x in regular_files(root)} - set(moved)
     if any(x in occupied for x in moved.values()):
         raise InputError('A destination collides with an existing file.')
@@ -711,8 +728,19 @@ def migrate_command(args):
         before[path.resolve()] = text
         if new_text != text:
             rewritten[path.resolve()] = new_text
+    # A paper renamed to another recognized prefix keeps its p2p_subfield metadata in step with the approved name.
+    renamed = []
+    for src, dst in moved.items():
+        text = rewritten.get(src, before.get(src))
+        if text is None or src.suffix.lower() != '.md' or role(text, src, root) != 'paper':
+            continue
+        prefix, sep, _ = dst.stem.partition(' - ')
+        old = scalar(split_front(text)[0], 'p2p_subfield')
+        if sep and old and old != prefix:
+            rewritten[src] = re.sub(r'^p2p_subfield:.*$', 'p2p_subfield: ' + json.dumps(prefix, ensure_ascii=False), text, count=1, flags=re.M)
+            renamed.append(dst.relative_to(root.resolve()).as_posix())
     rows = [{'from': s.relative_to(root).as_posix(), 'to': d.relative_to(root).as_posix()} for s, d in pairs]
-    result = {'status': 'preview', 'moves': rows,
+    result = {'status': 'preview', 'moves': rows, 'subfield_metadata_updated': renamed,
               'links_rewritten_in': sorted(x.relative_to(vault.resolve()).as_posix() for x in rewritten)}
     pointers = [k for k, v in p['context'].items() if isinstance(v, str) and (vault / v).resolve() in moved]
     if pointers:
@@ -749,6 +777,7 @@ def migrate_command(args):
             folder.rmdir()
             folder = folder.parent
     BASENAMES.clear()
+    pdfs.migrate_register(root, moved)
     result.update(status='migrated', record=str(record), navigation=apply_index(root, p, True))
     print(dump(result))
     return 0
@@ -801,6 +830,59 @@ def upgrade_command(args):
         result.update(status='upgraded', views=apply_views(root, profile_at(root), True),
                       navigation=apply_index(root, profile_at(root), True))
     print(dump(result))
+    return 0
+
+
+def pdfs_command(args):
+    root = no_symlink_root(Path(args.root))
+    core = sys.modules[__name__]
+    if args.action == 'text':
+        if not args.file:
+            raise InputError('pdfs text needs --file.')
+        pages = [int(x) for x in args.pages.split(',')] if args.pages else None
+        print(dump(pdfs.text_command(core, root, args.file, args.engine, pages)))
+        return 0
+    if not (root / CONFIG).is_file():
+        raise InputError('Initialize or adopt the selected workspace first.')
+    if args.action == 'scan':
+        if not args.source:
+            raise InputError('pdfs scan needs --from <folder>.')
+        print(dump(pdfs.scan(core, root, args.source)))
+        return 0
+    plan = json.loads(Path(args.plan).read_text(encoding='utf-8')) if args.plan else {}
+    items = plan.get('attach') if isinstance(plan, dict) else None
+    if not isinstance(items, list) or not items or not all(isinstance(x, dict) and x.get('pdf') and x.get('note') for x in items):
+        raise InputError('pdfs attach needs --plan with {"attach": [{"pdf": file, "note": "Library/.../Papers/Note.md"}]}.')
+    result = pdfs.attach(core, root, profile_at(root), [(x['pdf'], x['note']) for x in items], args.apply)
+    if args.apply:
+        result['navigation'] = apply_index(root, profile_at(root), True)
+    print(dump(result))
+    return 0
+
+
+def relate_command(args):
+    root = no_symlink_root(Path(args.root))
+    if not (root / CONFIG).is_file():
+        raise InputError('Initialize or adopt the selected workspace first.')
+    plan = json.loads(Path(args.plan).read_text(encoding='utf-8'))
+    items = plan.get('relations') if isinstance(plan, dict) else None
+    if not isinstance(items, list) or not items or not all(isinstance(x, dict) for x in items):
+        raise InputError('relate needs --plan with {"relations": [{"id", "a", "b", "kind", "papers", "text"}]}.')
+    print(dump(relations.relate(sys.modules[__name__], root, profile_at(root), items, args.apply)))
+    return 0
+
+
+def state_command(args):
+    root = no_symlink_root(Path(args.root))
+    if not (root / CONFIG).is_file():
+        raise InputError('Initialize or adopt the selected workspace first.')
+    core, p = sys.modules[__name__], profile_at(root)
+    if args.command == 'brief':
+        print(dump(state.brief(core, root, p)))
+    elif args.command == 'snapshot':
+        print(dump(state.snapshot(core, root, p, args.out)))
+    else:
+        print(dump(state.diff(core, root, p, args.baseline)))
     return 0
 
 
@@ -1039,6 +1121,8 @@ def check_workspace(args):
                 else:edges.append((path.resolve(),target.resolve()))
             except InputError as exc:errors.append(rel+': '+str(exc))
     extra,tally=graph_warnings(root,p,files,kinds,edges,counts);warnings+=extra
+    pdf_errors,pdf_warnings,pdf_counts=pdfs.audit(sys.modules[__name__],root,p,files,{f:k for f,k in ((x,kinds.get(x.resolve())) for x in files)});errors+=pdf_errors;warnings+=pdf_warnings
+    rel_errors,rel_warnings,rel_counts=relations.audit(sys.modules[__name__],root,p,kinds,edges);errors+=rel_errors;warnings+=rel_warnings
     navigation=navigation_status(root,p,tally,warnings)
     if SHORT_LINKS.get(vault.resolve()):warnings.append(str(SHORT_LINKS[vault.resolve()])+' wikilinks resolve by file name only; full vault-relative paths survive moves (migrate rewrites them).')
     for path in files:
@@ -1050,7 +1134,7 @@ def check_workspace(args):
     for name in projects:
         for raw in regular_files(root/name):
             if raw.suffix.lower()=='.pdf':warnings.append('PDF in Projects needs provenance review; source papers stay in Library/original archive, own result artifacts need evidence: '+str(raw.relative_to(root)))
-    report={'status':'failed' if errors else ('needs_review' if warnings else 'passed'),'structural_status':'failed' if errors else 'passed','navigation':navigation,'files':len(files),'roles':counts,'errors':sorted(set(errors)),'warnings':sorted(set(warnings)),
+    report={'status':'failed' if errors else ('needs_review' if warnings else 'passed'),'structural_status':'failed' if errors else 'passed','navigation':navigation,'pdfs':pdf_counts,'relations':rel_counts,'files':len(files),'roles':counts,'errors':sorted(set(errors)),'warnings':sorted(set(warnings)),
             'scope':'Structure, naming, locale-aware section/metadata presence, IDs/source duplicates, links/anchors and declared language shape. Not translation quality, source support or scientific verification.'}
     print(dump(report));return 1 if errors else 0
 
@@ -1249,7 +1333,16 @@ def render_command(args):
             raise InputError('Note exists; render never replaces a canonical note.')
         replacing=old;card['id']=scalar(split_front(old)[0],'p2p_id') or card.get('id')
     if not card.get('id'):card['id']=str(uuid.uuid4())
+    pdf=card.get('pdf')
+    if pdf is not None and (args.kind!='paper' or not isinstance(pdf,str) or not pdfs.inspect_pdf(Path(pdf).expanduser().read_bytes()).get('is_pdf')):
+        raise InputError('"pdf" must name an existing PDF file, for paper cards only.')
     text=i18n.render(args.kind,card,profile)
+    if card.get('evidence') is not None:
+        if args.kind not in ('project','project-record') or not isinstance(card['evidence'],list) or not card['evidence']:
+            raise InputError('"evidence" is a non-empty list for project and project-record cards.')
+        lines=results.evidence_lines(card['evidence'],{})
+        colon=lambda lang:'：' if lang.startswith('zh') else ':'
+        text=put_managed(text,[['**'+i18n.locale(lang,profile)['labels']['sources']+colon(lang)+'**',*lines] for lang in profile['note_languages']],EVIDENCE)
     identity=source_identity(text) if args.kind=='paper' else None
     for path in markdown_files(root):
         if replacing is not None and path.resolve()==dest.resolve():continue
@@ -1265,6 +1358,7 @@ def render_command(args):
         if dest.read_text(encoding='utf-8')!=text:raise InputError('Note readback failed.')
         result={'status':'rendered','path':str(dest),'id':card['id'],'languages':profile['note_languages'],'content_sha256':digest(text.encode('utf-8'))}
         # Path-derived navigation (field/direction/Library indexes) is written by the program, not the agent.
+        if pdf:result['original']=pdfs.attach(sys.modules[__name__],root,saved,[(pdf,dest.relative_to(root).as_posix())],True)
         result['navigation']=apply_index(root,saved,True)
     print(dump(result));return 0
 
@@ -1422,6 +1516,21 @@ def main(argv=None):
     cmd.add_argument('--prior',action='append',default=[]);cmd.add_argument('--stage',metavar='PACKET')
     cmd=sub.add_parser('review-discovery',help='Validate separate choices for material and connections.')
     cmd.add_argument('--root',required=True);cmd.add_argument('--packet',required=True);cmd.add_argument('--decisions',required=True)
+    cmd=sub.add_parser('pdfs',help='Original PDFs: scan a folder, extract text, attach approved copies to paper notes.')
+    cmd.add_argument('action',choices=('scan','text','attach'));cmd.add_argument('--root',required=True)
+    cmd.add_argument('--from',dest='source',help='scan: folder of PDFs');cmd.add_argument('--file',help='text: one PDF')
+    cmd.add_argument('--engine',choices=('auto','pymupdf','pdftotext','builtin'),default='auto');cmd.add_argument('--pages',help='text: e.g. 1,2,5')
+    cmd.add_argument('--plan',help='attach: {"attach": [{"pdf": file, "note": root-relative paper note}]}');cmd.add_argument('--apply',action='store_true')
+    cmd=sub.add_parser('relate',help='Preview or write registered research/concept connections from a {"relations": [...]} plan.')
+    cmd.add_argument('--root',required=True);cmd.add_argument('--plan',required=True);cmd.add_argument('--apply',action='store_true')
+    cmd=sub.add_parser('repo',help='Read-only inventory of a results repository: commit, remote, documents, results, figures.')
+    cmd.add_argument('action',choices=('scan',));cmd.add_argument('--path',required=True)
+    for name,text in (('brief','Read-only: rules and pointers with hashes, navigation, originals, relations, retrieval, next commands.'),
+                      ('snapshot','Store exact copies of notes, rules, registers and the link inventory before an edit.'),
+                      ('diff','Compare the workspace with a snapshot: files, links, roles, views and registers.')):
+        cmd=sub.add_parser(name,help=text);cmd.add_argument('--root',required=True)
+        if name=='snapshot':cmd.add_argument('--out',required=True)
+        if name=='diff':cmd.add_argument('--baseline',required=True)
     cmd=sub.add_parser('upgrade',help='Preview or bring a workspace up to this skill version (profile defaults, marked rules, views, indexes).')
     cmd.add_argument('--root',required=True);cmd.add_argument('--apply',action='store_true')
     cmd=sub.add_parser('views',help='Preview or merge the Research Map/Full Network graph bookmarks into the Obsidian vault.')
@@ -1437,7 +1546,7 @@ def main(argv=None):
     try:
         return {'inspect': inspect_workspace, 'init': init_workspace,
                 'check': check_workspace, 'export': export_workspace,
-                'preferences':preferences_command,'render':render_command,'locales':locales_command,'views':views_command,'index':index_command,'tag':tag_command,'migrate':migrate_command,'upgrade':upgrade_command,
+                'preferences':preferences_command,'render':render_command,'locales':locales_command,'views':views_command,'index':index_command,'tag':tag_command,'migrate':migrate_command,'upgrade':upgrade_command,'pdfs':pdfs_command,'relate':relate_command,'repo':lambda a:print(dump(results.scan(a.path))) or 0,'brief':state_command,'snapshot':state_command,'diff':state_command,
                 'discover':discovery_command,'review-discovery':discovery_command}[args.command](args)
     except (ValueError, OSError, TypeError, KeyError, UnicodeError) as ex:
         print(dump({'status': 'error', 'message': str(ex)}), file=sys.stderr)

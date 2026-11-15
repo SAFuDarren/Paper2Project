@@ -83,7 +83,7 @@ The project home is a short index. Paper notes stay in Library and can support m
    Start with a small structure and preserve my existing notes.
    ```
 
-On first use, the agent reuses available context and relevant memory, proposes a suitable structure and asks only for consequential missing choices. Downloading the repository itself runs no setup. First use also adds the **Research Map** and **Full Network** graph views as Obsidian bookmarks. Choose any folder for the workspace; the structure inside it is fixed. Existing notes are adopted, moved with link rewriting, tagged and indexed by the helper commands, so every paper is reachable from its field index.
+On first use, the agent reuses available context and relevant memory, proposes a suitable structure and asks only for consequential missing choices. Downloading the repository itself runs no setup. First use also adds the **Research Map** and **Full Network** graph views as Obsidian bookmarks. Hand over a folder of PDFs and your results repository: the helpers queue and read the PDFs, keep byte-identical originals beside each paper note, cite your results at a pinned commit, record each connection with its evidence and index everything for search. Choose any folder for the workspace; the structure inside it is fixed. Existing notes are adopted, moved with link rewriting, tagged and indexed by the helper commands, so every paper is reachable from its field index.
 
 ## Discover before adding
 

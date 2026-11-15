@@ -1,6 +1,6 @@
 ---
 name: paper2project
-description: Design and maintain a connected Markdown or Obsidian research workspace, linking source-grounded papers and concepts to potential directions and uniquely organized projects. Use for context-aware setup, project literature discovery, adjustable preferences, multilingual notes, research maps and project handoff.
+description: Design and maintain a connected Markdown or Obsidian research workspace, linking source-grounded papers and concepts to potential directions and uniquely organized projects. Use for turning a folder of PDFs and an existing results repository into a navigable research map, searching what the workspace already holds, context-aware setup, project literature discovery, adjustable preferences, multilingual notes, research maps and project handoff.
 ---
 
 # Paper2Project
@@ -9,7 +9,7 @@ Connect existing knowledge to research you can develop. Keep Library for papers/
 
 ## Core chain
 
-1. Read the current request, applicable rules, saved `.paper2project.json` and the existing management/task entry. Reuse known context. The host LLM may use relevant memory already supplied or authorized for this task; the skill has no universal memory API and must not crawl private history.
+1. Run `brief` for an initialized workspace; read the current request, applicable rules, saved `.paper2project.json` and the existing management/task entry. Reuse known context. The host LLM may use relevant memory already supplied or authorized for this task; the skill has no universal memory API and must not crawl private history.
 2. Resolve preferences: current explicit choice > saved workspace > supplied memory > conversation inference > defaults. Separate response, note and filename languages. Use [onboarding.md](references/onboarding.md) on first use; ask only consequential missing choices, at most three short questions. Inference does not select paths, change taxonomy or authorize external actions.
 3. Let the LLM produce judgments only: normalized signals, source-grounded note content, role and classification proposals, concept relations. Every step that follows from rules or paths runs through the program, never by hand-editing files: `preferences`, `init`, `render` (path, ID, index links), `index`, `tag`, `migrate`, `views`, `check` and `export`. Task-only overrides stay transient; an explicit enduring change updates the same profile with a hash guard, backup and readback. Existing notes are not translated or moved by a preference update.
 4. Follow the relevant route below. Moves go through `migrate` (before copies, path map, link rewriting); preserve stable IDs and source facts. Update active paths, links, reading/connection records and the existing task. Never create a parallel tracker.
@@ -22,6 +22,8 @@ First use is finished only when `check` reports `navigation.status: complete` (p
 | Work | Read only what is needed |
 |---|---|
 | First use, host context/memory or a preference change | [onboarding.md](references/onboarding.md) |
+| The user gives PDFs and/or their results repository | [pdfs-and-results.md](references/pdfs-and-results.md) |
+| Search what the Library/Projects and originals already hold | [retrieval.md](references/retrieval.md) |
 | Find related work or applications for a project | [discovery.md](references/discovery.md) |
 | Paper reading, concepts, directions and projects | [workflow.md](references/workflow.md) |
 | Classification, names, folders or migration | [structure-and-names.md](references/structure-and-names.md) |
@@ -54,7 +56,13 @@ Every writing command previews without `--apply`. `inspect/check/locales` and di
 | `index --apply` | The `<!-- p2p:index -->` lists: field → papers/concepts/directions, direction → project homes, project home → records, Library → fields, Projects → directions; creates a missing field index |
 | `tag --plan roles.json --apply` | Appends the approved role tag lines; refuses a conflicting role; then `index` |
 | `migrate --map moves.json --apply` | Moves files, rewrites every link to them vault-wide, keeps before-copies and the map in `.maintenance/migrations/`, then `index` |
-| `views --apply` | Merges Research Map/Full Network into `.obsidian/bookmarks.json` (backup, no deletion); the only writer of Obsidian settings | `preferences --scope workspace --apply` changes only the selected profile with the previewed hash and a backup. Explicit output snapshots and `export` never overwrite existing files.
+| `views --apply` | Merges Research Map/Full Network into `.obsidian/bookmarks.json` (backup, no deletion); the only writer of Obsidian settings |
+| `pdfs scan` / `pdfs text` | Read-only: intake queue (hash, pages, DOI/arXiv, duplicates, existing notes) and page text for reading |
+| `pdfs attach --plan --apply` | Byte-identical copy into the field's `PDFs/`, register, link in every language block (also via a paper card's `"pdf"`) |
+| `relate --plan --apply` | A recorded connection (literature, relevance, missing step, papers) in both endpoints and `.maintenance/relations.json` |
+| `repo scan` | Read-only: results repository commit, remote (no credentials) and citable files; cards cite them through `"evidence"` |
+| `brief`, `snapshot --out`, `diff --baseline` | Context and next commands; before-copies with a link inventory; changed files, links, roles, views and registers |
+| `scripts/retrieve.py sync/search/page` | Derived SQLite index of notes and originals; lexical search, semantic only with the user's embedding extension | `preferences --scope workspace --apply` changes only the selected profile with the previewed hash and a backup. Explicit output snapshots and `export` never overwrite existing files.
 
 Eight built-in label packs cover English, simplified/traditional Chinese, Spanish, French, German, Japanese and Arabic. For another language, have the LLM fill a complete `locale_overrides` pack using `locales --template <tag>`, validate/save it, then render. Do not silently substitute English. Each new note declares its own languages; old en/en-zh workspaces remain readable.
 

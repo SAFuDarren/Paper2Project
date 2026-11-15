@@ -76,6 +76,10 @@ Paths above are examples, not a required local tree. Management/task/template/ma
 - Back up the active record and update that same record. Do not batch-rewrite frozen history or replace an external project system with a new tracker.
 - A template and an owner field are conventions, not runtime locks. Coordinate writers and reread before writing; do not promise enforced routing or concurrency protection unless implemented and tested.
 
+## Context, before-copies and review
+
+`brief` is the first read of a session: rule and pointer files with hashes, profile choices, the `navigation` block, originals, recorded connections, retrieval freshness and the next commands. Before an authorized content edit, `snapshot --out .maintenance/snapshots/<run>` stores exact copies and the link inventory; afterwards `diff --baseline` lists changed files, added/removed links, role changes and changed registers or views, so meaning and links are reviewed rather than counts.
+
 ## Acceptance: prove handoff with a small rehearsal
 
 1. Give a fresh-context agent only the management-entry path and task purpose. It should identify the applicable rules, unchanged preferences, canonical task, state and next action without relying on the previous chat.

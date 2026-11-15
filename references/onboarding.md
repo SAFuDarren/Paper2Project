@@ -35,6 +35,8 @@ The initializer only accepts an empty root. It creates localized home/index text
 
 `render --apply` places each note at the path derived from its card, adds a UUID when the card has none, and runs `index`, which links the paper from its field index (creating a missing one) and the field from the Library index. The agent adds only the concept links its sources support.
 
+When the user hands over PDFs and/or a results repository, continue with [pdfs-and-results.md](pdfs-and-results.md) right after `init`.
+
 ## Existing workspace: adopt, then connect
 
 When the chosen root already has notes, do not stop at a map or summary. Each step below is one command; the agent supplies the judgments as JSON and the program writes the files.

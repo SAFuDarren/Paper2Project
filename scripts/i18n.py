@@ -73,6 +73,10 @@ def render(kind,card,profile):
         colon='：' if language.startswith('zh') else ':'
         metadata='\n'.join('**'+loc['labels'][key]+colon+'** '+values[key]+'  ' for key in meta_keys)
         sections='\n\n'.join('## '+loc['sections'].get(key,loc['ui'].get(key,key))+'\n\n'+content[key] for key in section_keys)
+        if content.get('locations'):
+            # Folded source locations (section/theorem/page/figure) keep the reading interface short.
+            if not isinstance(content['locations'],str):raise ValueError('locations must be text for '+language)
+            sections+='\n\n<details>\n<summary>'+loc['labels']['sources']+'</summary>\n\n'+content['locations'].strip()+'\n\n</details>'
         template=(ASSETS/'templates'/ (kind+'.md')).read_text(encoding='utf-8')
         body=template.replace('{{TITLE}}',title).replace('{{METADATA}}',metadata).replace('{{SECTIONS}}',sections)
         blocks.append(body.strip())
