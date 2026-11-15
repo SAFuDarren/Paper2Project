@@ -136,7 +136,7 @@ class PipelineTests(PipelineBase):
                                              folder/'Linear attention 2006.16236v3.pdf', subfield='Attention Mechanisms',
                                              extra=' Uses ' + link + '.'))
         self.assertEqual(self.cli('pdfs', 'scan', '--root', self.root, '--from', folder)['counts'],
-                         {'attached': 2, 'duplicate_file': 1, 'not_pdf': 1})
+                         {'attached': 3, 'not_pdf': 1})  # both identical copies report the note they belong to
         # 4. Results repository: provenance comes from the repository itself, without credentials.
         repo = self.results_repo()
         scan = self.cli('repo', 'scan', '--path', repo)
@@ -302,7 +302,8 @@ class OriginalSafetyTests(PipelineBase):
         note = (self.root/ML/'Papers/Sequence Models - Transformer.md').read_text(encoding='utf-8')
         self.assertEqual(note.count('](' + self.original.as_uri() + ')'), 2)  # outside the vault: a file link
         self.assertEqual(self.cli('check', '--root', self.root)['errors'], [])
-        self.assertEqual(self.cli('pdfs', 'scan', '--root', self.root, '--from', self.folder)['pdfs'][2]['status'], 'attached')
+        rows = self.cli('pdfs', 'scan', '--root', self.root, '--from', self.folder)['pdfs']
+        self.assertEqual(next(r for r in rows if Path(r['file']).name == 'vaswani2017.pdf')['status'], 'attached')
         self.run_py('retrieve.py', 'sync', '--root', self.root)
         hit = self.run_py('retrieve.py', 'search', '--root', self.root, 'key dimension', '--source', 'pdf')['results'][0]['passages'][0]
         self.assertTrue(hit['locator']['open'].startswith(self.original.as_uri() + '#page='))

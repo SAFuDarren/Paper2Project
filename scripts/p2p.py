@@ -475,7 +475,7 @@ def index_plan(root, p):
     kinds = {f: role(t, f, root) for f, t in texts.items()}
     title = lambda f: note_title(texts[f], f)
     fields, directions = {}, {}
-    for f, kind in sorted(kinds.items()):
+    for f, kind in sorted(kinds.items(), key=lambda kv: kv[0].as_posix()):
         parts = f.relative_to(root).parts
         area = {'paper': ('library', 'papers'), 'concept': ('library', 'concepts')}.get(kind)
         if area and len(parts) == 5 and parts[0] == layout['library'] and parts[3] == layout[area[1]]:
@@ -485,7 +485,7 @@ def index_plan(root, p):
             directions.setdefault(f.parent, [f, []])
         if kind == 'field' and len(parts) == 4 and parts[0] == layout['library'] and f.stem == parts[2]:
             fields.setdefault(parts[1:3], {'paper': [], 'concept': [], 'direction': []})
-    for f, kind in sorted(kinds.items()):
+    for f, kind in sorted(kinds.items(), key=lambda kv: kv[0].as_posix()):
         if kind == 'project' and f.parent.parent in directions:
             directions[f.parent.parent][1].append(f)
     plan, base = {}, root
@@ -514,11 +514,11 @@ def index_plan(root, p):
                        (lambda loc: loc['sections']['related_concepts'], [link(x) for x in members['concept']]),
                        (lambda loc: loc['sections']['opportunities'], [link(x) for x in members['direction']])],
                'field', field)
-    for folder, (note, homes) in sorted(directions.items()):
+    for folder, (note, homes) in sorted(directions.items(), key=lambda kv: kv[0].as_posix()):
         update(note, [(lambda loc: loc['ui']['projects'], [link(x) for x in homes])], 'direction', note.stem)
     # A project home lists its internal records by typed group (navigation, not graph edges).
-    for home in sorted(f for f, kind in kinds.items() if kind == 'project'):
-        records = {g: sorted(r for r, kind in kinds.items() if kind == 'project-record' and r.parent == home.parent / name)
+    for home in sorted((f for f, kind in kinds.items() if kind == 'project'), key=lambda x: x.as_posix()):
+        records = {g: sorted((r for r, kind in kinds.items() if kind == 'project-record' and r.parent == home.parent / name), key=lambda x: x.as_posix())
                    for g, name in layout['groups'].items()}
         update(home, [((lambda n: lambda loc: n)(layout['groups'][g]), [link(x) for x in records[g]])
                       for g in ('problem', 'methods', 'results', 'extensions')], 'project', home.stem)
@@ -531,7 +531,7 @@ def index_plan(root, p):
                     entries.setdefault(discipline, []).append(index)
             else:
                 entries.setdefault(discipline, []).extend(members['direction'])
-        groups = [((lambda d: lambda loc: d)(d), [link(x) for x in sorted(entries[d])]) for d in sorted(entries) if entries[d]]
+        groups = [((lambda d: lambda loc: d)(d), [link(x) for x in sorted(entries[d], key=lambda x: x.as_posix())]) for d in sorted(entries) if entries[d]]
         note = base / layout[area] / (layout[area] + '.md')
         contents = [grouped_lines(p, lang, groups) for lang in languages(note)]
         if note in texts and kinds[note] is None and (groups or MANAGED[0] in texts[note]):
@@ -562,7 +562,7 @@ def apply_index(root, p, apply):
     plan = index_plan(root, p)
     before = {x: (raw_text(x) if x.exists() else None) for x in plan}
     changes = [{'path': x.relative_to(root).as_posix(), 'action': 'update' if before[x] is not None else 'create'}
-               for x in sorted(plan)]
+               for x in sorted(plan, key=lambda x: x.as_posix())]
     if apply:
         write_texts(plan, before)
     return {'status': ('written' if plan else 'unchanged') if apply else 'preview', 'changes': changes}

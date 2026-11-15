@@ -299,7 +299,8 @@ def scan(core, root, folder):
                      for f in row.get('files', []) if f.get('original_sha256')})
     identities = note_identities(core, root)
     rows, seen = [], {}
-    for path in sorted(p for p in folder.rglob('*') if p.is_file() and p.suffix.lower() == '.pdf' and not p.is_symlink()):
+    # Sort by the POSIX string so the same files are judged the same way on every OS (Windows sorts Paths case-insensitively).
+    for path in sorted((p for p in folder.rglob('*') if p.is_file() and p.suffix.lower() == '.pdf' and not p.is_symlink()), key=lambda x: x.as_posix()):
         raw = path.read_bytes()
         digest = sha256(raw)
         info = inspect_pdf(raw)
@@ -312,10 +313,10 @@ def scan(core, root, folder):
             match = match or identities.get(key)
         if not info['is_pdf']:
             row['status'] = 'not_pdf'
-        elif digest in seen:
-            row.update(status='duplicate_file', same_as=seen[digest])
         elif digest in attached:
             row.update(status='attached', note=attached[digest])
+        elif digest in seen:
+            row.update(status='duplicate_file', same_as=seen[digest])
         elif match:
             row.update(status='note_exists_without_this_pdf', note=match)
         else:

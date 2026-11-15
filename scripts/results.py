@@ -90,7 +90,7 @@ def scan(repo):
     state = git_state(repo)
     groups = {name: [] for name, _ in GROUPS}
     other = 0
-    for path in sorted(repo.rglob('*')):
+    for path in sorted(repo.rglob('*'), key=lambda x: x.as_posix()):
         rel = path.relative_to(repo)
         if any(part in SKIP or part.startswith('.') for part in rel.parts) or not path.is_file() or path.is_symlink():
             continue
