@@ -145,7 +145,7 @@ class UpdateTests(unittest.TestCase):
         template = installed/'assets/templates/paper.md'
         template.write_text(template.read_text(encoding='utf-8') + '\nLab footer\n', encoding='utf-8')
         onboarding = installed/'references/onboarding.md'
-        onboarding.write_bytes(onboarding.read_bytes().replace(b'\n', b'\r\n'))  # unmodified, CRLF checkout
+        onboarding.write_bytes(onboarding.read_bytes().replace(b'\r\n', b'\n').replace(b'\n', b'\r\n'))  # unmodified, CRLF checkout
         new = self.release(self.base/'new', '\nRelease note line.\n')
         preview = self.run_py('update_skill.py', '--target', installed, package=new)
         self.assertEqual(preview['status'], 'preview')

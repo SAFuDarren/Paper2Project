@@ -36,7 +36,7 @@ class DeterministicTests(unittest.TestCase):
     def put(self, relative, content, root=None):
         p = (root or self.root)/relative
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(content, encoding='utf-8')
+        p.write_bytes(content.encode('utf-8'))  # exact bytes: no newline translation on Windows
         return p
 
     def card(self, name='card.json', languages=('en',), **values):
@@ -112,7 +112,7 @@ class DeterministicTests(unittest.TestCase):
         self.profile.write_text(json.dumps({'language': 'en-zh'}))
         self.init()
         result = self.render(card=self.card(languages=('en', 'zh')))
-        self.assertTrue(result['path'].endswith(FIELD + 'Papers/Sequence Models - Transformer.md'))
+        self.assertTrue(Path(result['path']).as_posix().endswith(FIELD + 'Papers/Sequence Models - Transformer.md'))
         self.assertRegex(result['id'], r'^[0-9a-f-]{36}$')
         self.assertIn({'path': FIELD + 'Machine Learning.md', 'action': 'create'}, result['navigation']['changes'])
         index = (self.root/FIELD/'Machine Learning.md').read_text(encoding='utf-8')
