@@ -1,0 +1,29 @@
+{
+  "title": "Synthetic recall measurement",
+  "discipline": "Computer Science",
+  "field": "Machine Learning",
+  "direction": "Sequence Models",
+  "project": "Synthetic Project",
+  "group": "results",
+  "evidence": [
+    {
+      "path": "results/metrics.csv",
+      "commit": "0123456789abcdef0123456789abcdef01234567",
+      "remote": "https://github.com/example/synthetic-results.git",
+      "note": "fictional table"
+    }
+  ],
+  "metadata": {
+    "project": "Synthetic Project",
+    "record": "result",
+    "status": "fictional example"
+  },
+  "content": {
+    "fr": {
+      "body": "Exemple fictif : aucun résultat réel.",
+      "basis_scope": "Aucun.",
+      "evidence": "Voir la source citée.",
+      "remaining": "Tout reste à mesurer."
+    }
+  }
+}

@@ -1,8 +1,11 @@
 {
   "id": "example-paper-001",
   "title": "Synthetic Workflow Example",
-  "source_id": "example:workflow-fixture",
+  "discipline": "Computer Science",
+  "field": "Machine Learning",
   "subfield": "Sequence Models",
+  "short_title": "Synthetic Workflow",
+  "source_id": "example:workflow-fixture",
   "metadata": {
     "paper": "https://example.org/paper",
     "version": "Fictional example only",
@@ -17,7 +20,8 @@
       "method": "Fournir les champs sémantiques puis générer les libellés localisés.",
       "results": "Aucun résultat de recherche ; vérifier le logiciel séparément.",
       "argument": "Champs fournis → rendu → contrôle de structure.",
-      "connection": "Illustration du workflow, sans contribution scientifique revendiquée."
+      "connection": "Illustration du workflow, sans contribution scientifique revendiquée.",
+      "locations": "Exemple fictif : aucune page lue."
     }
   }
 }
