@@ -1,6 +1,6 @@
 # Preferences, one entry and reliable handoff
 
-Use for adopting an existing workspace or improving how another agent finds its rules and maintenance state. These changes improve execution without changing the user's research/management requirements. `init` does not perform this migration and does not install global hooks.
+Use for adopting an existing workspace or improving how another agent finds its rules and maintenance state. These changes improve execution without changing the user's research/management requirements. `init --adopt` registers the workspace and its graph views without moving notes (see [onboarding.md](onboarding.md)); it performs no migration and installs no global hooks.
 
 ## Preserve before adapting
 

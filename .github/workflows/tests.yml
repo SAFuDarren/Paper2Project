@@ -42,4 +42,4 @@ jobs:
       - name: Compile scripts
         run: python -m compileall -q scripts
       - name: Package checks
-        run: python scripts/package_check.py
+        run: python scripts/package_check.py --release

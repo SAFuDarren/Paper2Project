@@ -85,7 +85,7 @@ def render(kind,card,profile):
     return front+join_blocks(blocks)+(('\n#'+tag+'\n') if tag else '')
 
 
-def scaffold(profile,query):
+def scaffold(profile):
     layout=profile['layout'];prefix=profile['vault_prefix'];base=(prefix+'/') if prefix else ''
     link=lambda x:'[['+base+x+']]'
     homes,libraries,projects=[],[],[]

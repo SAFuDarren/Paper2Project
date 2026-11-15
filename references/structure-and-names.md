@@ -2,6 +2,8 @@
 
 ## One taxonomy, two purposes
 
+The user chooses where the academic root lives (any folder of the vault; the vault prefix is detected) and the display names of the role folders in `layout`. Below the root, the hierarchy is fixed: `check` reports any note outside it, and the commands only create files at these canonical places.
+
 Library and Projects share discipline and field spellings. Library fields are knowledge indexes; Projects directions are research opportunities. The same academic term can serve both roles without making two copies of a paper or project.
 
 ```text
@@ -51,15 +53,16 @@ New templates include a persistent `p2p_id` (generate a UUID; keep it when moved
 
 Legacy notes can remain metadata-free. Export labels path-derived fallback IDs as such; they change on a move. Before building a persistent external index, adopt stable IDs or send an explicit old/new migration map. Never silently reassign a note's identity.
 
-## Migration checklist
+## Migration
 
-1. Capture scoped originals, file hashes, canonical IDs, primary source identities and semantic relation/coverage inventory. Keep snapshots outside the reading interface and graph query.
-2. Prepare old→new paths, role-specific routes for combined field/direction pages, and heading/block-anchor redirects where needed. Count alone is insufficient to preserve relationships.
-3. Recheck original hashes before applying. Preserve concurrent user edits; do not overwrite them to complete a migration. Carry out only the authorized scope.
-4. Move once; rewrite active full-path wikilinks, Markdown links, project sources and current manifests. Preserve historical provenance instead of pretending to reread sources.
-5. Compare source text, all declared language blocks, citations and explained relations. Remove only empty retired directories; retain original PDFs and unrelated configuration.
-6. Check links, anchors, one project home and typed records. Inspect real reading jumps. If graph settings changed, save and restore both views through the supported Obsidian interface.
-7. Update the existing maintenance entry and give the new reading entry. Do not leave duplicate redirect homes or build another task system.
+The agent's part is the destination of each file (a JSON map, approved by the user). The program does the rest:
+
+```sh
+python scripts/p2p.py migrate --root /chosen/Academic --map /chosen/moves.json
+python scripts/p2p.py migrate --root /chosen/Academic --map /chosen/moves.json --apply
+```
+
+`{"moves": {"old/relative/path.md": "Library/<Discipline>/<Field>/Papers/<Subfield> - <Short title>.md"}}` paths are root-relative with forward slashes. The command refuses missing sources, existing or duplicate destinations, extension changes and unportable names before writing anything. On apply it rechecks every file it read, stores before-copies, source hashes and the map in `.maintenance/migrations/<run>/`, rewrites wiki links (as full vault-relative paths, keeping anchors, aliases and `\|`), Markdown links (re-relativized) and embeds in every vault note, moves the files, removes emptied folders and runs `index`. It reports profile pointers that named a moved file. Afterwards run `check`, compare meaning where notes were merged by hand, and run `views --apply` if the prefix or palette changed. Do not leave duplicate redirect homes or build another task system.
 
 This skill carries no permission to publish a repository, modify manuscripts, contact authors, change database/sync settings or install extensions. Those follow the user's actual task and chosen tools.
 

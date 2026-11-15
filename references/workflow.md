@@ -74,12 +74,13 @@ Return a concise result with the reading entry, additions, remaining evidence ga
 
 ## Deterministic card rendering
 
-Supply a JSON card with `id` (stable), `title` (original), optional `source_id`/`subfield`, shared `metadata`, and `content` keyed by each selected language tag. For a paper, shared metadata supplies `paper` (primary URL), `version`, `field`; each language supplies `summary`, `reading_scope`, `question`, `setup`, `method`, `results`, `argument`, `connection`. Use real source-grounded text, or state the actual unknown/limited reading explicitly.
+Supply a JSON card with `title` (original), the classification `discipline` and `field` (plus `subfield` and `short_title` for a paper; `direction`, `project` and `group` for project notes), optional `source_id`, shared `metadata`, and `content` keyed by each selected language tag. The program derives the canonical path from the classification and generates the stable `id` (a UUID) when the card has none; supply `id` only to keep an existing identity. For a paper, shared metadata supplies `paper` (primary URL), `version`, `field`; each language supplies `summary`, `reading_scope`, `question`, `setup`, `method`, `results`, `argument`, `connection`. Use real source-grounded text, or state the actual unknown/limited reading explicitly.
 
 ```sh
-python scripts/p2p.py render --root /chosen/Academic --kind paper --input /chosen/card.json --output "Library/Computer Science/Machine Learning/Papers/Sequence Models - Short title.md"
+python scripts/p2p.py render --root /chosen/Academic --kind paper --input /chosen/card.json
+# → Library/<discipline>/<field>/Papers/<subfield> - <short_title>.md
 ```
 
-Preview includes Markdown. Add `--apply` for exclusive new-note creation with readback; it does not replace existing notes or duplicate IDs/sources. `--profile` may select a task-only profile snapshot. Custom locale packs used by durable notes must already be saved in the workspace.
+Preview includes Markdown and the derived path. Add `--apply` for exclusive new-note creation with readback, followed by `index`; it does not replace existing notes (except a program-generated field index, whose ID it keeps) or duplicate IDs/sources. `--output` remains for a custom `filename_style`. `--profile` may select a task-only profile snapshot. Custom locale packs used by durable notes must already be saved in the workspace.
 
 The six templates share semantic keys (see `i18n.SPECS` for exact required keys): field (`scope`, `papers`, `related_research`); concept (`definition`, `related_concepts`, metadata `from_papers`); direction (`scope`, `papers_concepts`, `opportunities`, `projects`, metadata `field`/`naming_basis`); project (`scope`, `problem`, `methods`, `results`, `extensions`, `research_connections`, `knowledge_basis`, metadata `status`); project-record (`body`, `basis_scope`, `evidence`, `remaining`, metadata `project`/`record`/`status`). Relationships inside these fields still need explained source support. Customize filename wording in the selected language; nonstandard paper names retain `p2p_subfield` for classification checks.

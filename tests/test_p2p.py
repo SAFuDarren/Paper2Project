@@ -79,7 +79,8 @@ class WorkspaceTests(unittest.TestCase):
                           'direction':'Sequence Models','basis':'Supplied synthetic classification fixture, not evidence verification.'}]
         (self.root/'.paper2project.json').write_text(json.dumps(cfg))
         p=self.paper()
-        self.assertEqual(self.cli('check','--root',str(self.root))['warnings'],[])
+        warnings=self.cli('check','--root',str(self.root))['warnings']
+        self.assertFalse([x for x in warnings if 'naming basis' in x])
         p.rename(p.with_name('Invented Direction - Example.md'))
         errors=self.cli('check','--root',str(self.root),expected=1)['errors']
         self.assertTrue(any('prefix differs from registered' in x for x in errors))

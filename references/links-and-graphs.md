@@ -51,13 +51,27 @@ Full Network uses:
 path:"Academic/" (tag:#research-field OR tag:#research-direction OR tag:#research-project OR tag:#paper OR tag:#concept)
 ```
 
-If the academic root is the whole vault, omit the path clause. Adapt the path, not the role vocabulary. Both filters and role/color groups are generated as guidance in the workspace's scoped AGENTS. Configure/save them through Obsidian's supported interface; the local utility does not edit `.obsidian`.
+If the academic root is the whole vault, omit the path clause. Adapt the path, not the role vocabulary.
+
+`init` and `init --adopt` create both views as graph bookmarks in a `Paper2Project` bookmark group, together with a bookmark for the reading entry. Run `views` to preview and `views --apply` to refresh them after a palette or `vault_prefix` change:
+
+```sh
+python scripts/p2p.py views --root /chosen/Academic --apply
+```
+
+The command builds the queries and role colors from the live profile and writes to the vault that contains `vault_prefix` (the folder above the academic root when a prefix is set). It merges: existing bookmarks, groups and a view's saved layout/forces are kept; an equivalent user view elsewhere is reused instead of duplicated; the previous file is backed up beside it. It reports nested `.obsidian` folders on the path, because bookmarks are only visible in the vault actually opened. Obsidian reads bookmarks when a vault opens: if the vault is already open, reopen it; if a running Obsidian later overwrites the file, close it and run `views --apply` again. No other script edits `.obsidian`.
 
 The Research Map retains real direction/project connections, not just a tree of classification. If several internal questions support one displayed project edge, preserve their individual facts and source locations inside the project; visual aggregation is not new evidence.
 
 ## Verify the saved views
 
-Open Research Map, check the query, role groups and distinct colors, then save and restore it. Repeat for Full Network. Editing a bookmark title alone may not update the saved graph state; use the application's supported save/replacement flow and verify restoration before removing any temporary predecessor.
+Open the Research Map bookmark and check the query, role groups and distinct colors. Repeat for Full Network. When the native app is unavailable to you, say the bookmarks were written but not visually checked. Editing a bookmark title alone may not update the saved graph state; rerun `views --apply` or use the application's own save flow.
+
+Path-derived links are program-made. `index --apply` (run by `render`, `tag` and `migrate`) keeps one `<!-- p2p:index -->` list per language block: a field index lists its papers, concepts and same-field directions; a direction lists its project homes; a project home lists its records by Problem/Methods/Results/Extensions; Library and Projects list fields and directions. It creates a missing field index (marked `p2p_generated`, replaced by `render --kind field` with the same ID) and never rewrites a note without the expected role. Edit outside the markers; the list is regenerated.
+
+A view is only as connected as its links. `check` warns when a paper or concept has no link to or from another role note (navigation pages without a role tag are not graph nodes), when its field index is missing or untagged, and when Markdown notes exist without any role tag. Clear those with `index --apply` and the concept links the sources support, never by inventing edges. `check` also returns a `navigation` block (`initialized`, `views`, counts, `status`) that decides whether setup is complete.
+
+Obsidian also treats YAML `tags:` and inline `#tag` as tags, and `tag:#paper` matches nested tags such as `#paper/selected`; `check` reads roles the same way. Bare `[[Name]]` links resolve by file name as in Obsidian (ambiguous names are errors); `migrate` turns them into full paths. Inside a Markdown table, write a labelled link as `[[path\|label]]`.
 
 Color denotes role, not importance, proof or completion. Use clear labels and written status; graph scope should remain understandable in monochrome. Avoid dense edge-label clutter and forcing every record into the direction view.
 
