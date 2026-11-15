@@ -254,7 +254,7 @@ class PdfRuleTests(PipelineBase):
         self.assertEqual(self.cli('check', '--root', self.root)['errors'], [])
         copy = self.root/ML/'PDFs/Sequence Models - Transformer.pdf'
         copy.write_bytes(copy.read_bytes() + b'\n% edited')
-        self.assertTrue(any('differ from the register' in x for x in self.cli('check', '--root', self.root, expected=1)['errors']))
+        self.assertTrue(any('differs from the register' in x for x in self.cli('check', '--root', self.root, expected=1)['errors']))
         copy.write_bytes((self.folder/'vaswani2017.pdf').read_bytes())
         note = self.root/self.note
         text = note.read_text(encoding='utf-8')
@@ -271,6 +271,75 @@ class PdfRuleTests(PipelineBase):
         message = self.cli('pdfs', 'text', '--root', self.root, '--file', empty, '--engine', 'builtin', expected=2)['message']
         self.assertIn('PyMuPDF', message)
         self.assertIn('metadata only', message)
+
+
+class OriginalSafetyTests(PipelineBase):
+    """The user's PDF files are copied or linked, never moved, renamed or changed."""
+
+    def setUp(self):
+        super().setUp()
+        self.init()
+        self.folder = self.pdf_folder()
+        self.original = self.folder/'vaswani2017.pdf'
+        self.before = (self.original.read_bytes(), self.original.stat().st_mtime_ns)
+
+    def assert_original_untouched(self):
+        self.assertTrue(self.original.is_file())
+        self.assertEqual((self.original.read_bytes(), self.original.stat().st_mtime_ns), self.before)
+
+    def test_copy_mode_leaves_the_original_in_place(self):
+        self.render('paper', self.paper_card('Attention Is All You Need', 'Transformer', 'https://arxiv.org/abs/1706.03762', self.original))
+        self.assert_original_untouched()
+        self.assertTrue((self.root/ML/'PDFs/Sequence Models - Transformer.pdf').is_file())
+
+    def test_link_mode_registers_the_original_where_it_is(self):
+        card = self.paper_card('Attention Is All You Need', 'Transformer', 'https://arxiv.org/abs/1706.03762', self.original)
+        card['pdf_mode'] = 'link'
+        result = self.render('paper', card)
+        self.assertEqual(result['original']['attachments'][0]['action'], 'link')
+        self.assert_original_untouched()
+        self.assertFalse((self.root/ML/'PDFs').exists())
+        note = (self.root/ML/'Papers/Sequence Models - Transformer.md').read_text(encoding='utf-8')
+        self.assertEqual(note.count('](' + self.original.as_uri() + ')'), 2)  # outside the vault: a file link
+        self.assertEqual(self.cli('check', '--root', self.root)['errors'], [])
+        self.assertEqual(self.cli('pdfs', 'scan', '--root', self.root, '--from', self.folder)['pdfs'][2]['status'], 'attached')
+        self.run_py('retrieve.py', 'sync', '--root', self.root)
+        hit = self.run_py('retrieve.py', 'search', '--root', self.root, 'key dimension', '--source', 'pdf')['results'][0]['passages'][0]
+        self.assertTrue(hit['locator']['open'].startswith(self.original.as_uri() + '#page='))
+        # A change made outside Paper2Project is reported, never repaired by moving or rewriting the file.
+        self.original.write_bytes(self.before[0] + b'\n% annotated')
+        self.assertTrue(any('Linked original changed' in x for x in self.cli('check', '--root', self.root, expected=1)['errors']))
+        self.original.rename(self.folder/'renamed.pdf')
+        self.assertTrue(any('Linked original is missing' in x for x in self.cli('check', '--root', self.root, expected=1)['errors']))
+        self.assertEqual((self.folder/'renamed.pdf').read_bytes(), self.before[0] + b'\n% annotated')
+
+    def test_link_mode_inside_the_vault_uses_a_wikilink(self):
+        self.render('paper', self.paper_card('Other Paper', 'Other', 'https://example.org/other'))
+        inside = self.root/'Sources/other.pdf'
+        inside.parent.mkdir()
+        inside.write_bytes((self.folder/'Linear attention 2006.16236v3.pdf').read_bytes())
+        plan = self.write_json({'attach': [{'pdf': str(inside), 'note': ML + 'Papers/Sequence Models - Other.md', 'mode': 'link'}]})
+        self.cli('pdfs', 'attach', '--root', self.root, '--plan', plan, '--apply')
+        note = (self.root/ML/'Papers/Sequence Models - Other.md').read_text(encoding='utf-8')
+        self.assertEqual(note.count('[[Sources/other.pdf|other.pdf]]'), 2)
+        self.assertTrue(inside.is_file())
+        self.assertEqual(self.cli('check', '--root', self.root)['errors'], [])
+
+    def test_migrate_never_moves_a_pdf(self):
+        stray = self.root/'Sources/paper.pdf'
+        stray.parent.mkdir()
+        stray.write_bytes(self.before[0])
+        plan = self.write_json({'moves': {'Sources/paper.pdf': ML + 'PDFs/paper.pdf'}})
+        self.assertIn('not moved by migrate', self.cli('migrate', '--root', self.root, '--map', plan, '--apply', expected=2)['message'])
+        self.assertEqual(stray.read_bytes(), self.before[0])
+        card = self.paper_card('Attention Is All You Need', 'Transformer', 'https://arxiv.org/abs/1706.03762', stray)
+        card['pdf_mode'] = 'link'
+        self.render('paper', card)
+        move = self.write_json({'moves': {ML + 'Papers/Sequence Models - Transformer.md': TCS + 'Papers/Formal Methods - Transformer.md'}})
+        result = self.cli('migrate', '--root', self.root, '--map', move, '--apply')
+        self.assertEqual(len(result['moves']), 1)  # the note only; the linked original stays put
+        self.assertEqual(stray.read_bytes(), self.before[0])
+        self.assertEqual(self.cli('check', '--root', self.root)['errors'], [])
 
 
 class RelationRuleTests(PipelineBase):

@@ -17,7 +17,12 @@ python scripts/p2p.py pdfs text --root /chosen/Academic --file "/path/to/pdfs/pa
 
 `text` returns the selectable text page by page, so a text-only model can read the paper. It uses PyMuPDF when installed, else poppler's `pdftotext`, else a built-in reader for common PDFs. Pages flagged `needs_visual_check` (formulas, unusual fonts, scans) must be checked against the original. If no engine can read a file, the result says so: install PyMuPDF (`pip install pymupdf`) or poppler, or record the reading scope as metadata only. Never fill a note from the filename.
 
-For each paper write a card (see [workflow.md](workflow.md)) with its classification, real six-part content, `locations` (section/page/figure per language) and `"pdf": "<file>"`. `render --apply` places the note, copies the PDF byte-for-byte to the field's `PDFs/<note name>.pdf`, registers it in `.maintenance/pdf_attachments.json` (hashes, page count, original path), links the copy in every language block and runs `index`. Originals are never moved or deleted. One PDF belongs to one paper note; a second authentic revision gets an explicit name such as ` - arXiv v2`.
+For each paper write a card (see [workflow.md](workflow.md)) with its classification, real six-part content, `locations` (section/page/figure per language) and `"pdf": "<file>"`. `render --apply` places the note and attaches the original in one of two ways, then runs `index`:
+
+- `"pdf_mode": "copy"` (default): a byte-identical copy at the field's `PDFs/<note name>.pdf`, so the workspace is self-contained and portable.
+- `"pdf_mode": "link"`: no copy; the original is registered where it is and linked (a wikilink inside the vault, a `file://` link outside it). Use it when the user keeps a curated PDF library or other tools point at those files.
+
+Either way the user's original files are never moved, renamed, modified or deleted, and `migrate` refuses to move any PDF; only a managed copy follows its note. `.maintenance/pdf_attachments.json` records each copy or link with its hash, page count and original path. If a linked original later changes or disappears, `check` reports it and the agent asks the user; nothing is repaired automatically. One PDF belongs to one paper note; a second authentic revision gets an explicit name such as ` - arXiv v2`.
 
 Render concepts before the papers whose text links them. Link a concept only where the paper defines or uses it.
 

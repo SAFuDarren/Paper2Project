@@ -142,11 +142,12 @@ def current_documents(root, p):
             rel = path.relative_to(root).as_posix()
             docs[rel] = {'source': 'notes', 'kind': kind, 'title': p2p.note_title(text, path),
                          'sha256': digest(text), 'canonical': rel, 'text': text}
+    vault = p2p.vault_base(root, p['vault_prefix'])
     for note, row in pdfs.load_register(root)['papers'].items():
         for item in row.get('files', []):
-            pdf = root / item['path']
+            pdf = pdfs.locate(root, vault, item)
             if pdf.is_file() and note in docs:
-                docs[item['path']] = {'source': 'pdf', 'kind': 'original', 'title': docs[note]['title'],
+                docs[pdfs.entry_key(item)] = {'source': 'pdf', 'kind': 'original', 'title': docs[note]['title'],
                                       'sha256': item['sha256'], 'canonical': note, 'file': pdf}
     return docs
 
@@ -269,8 +270,10 @@ def search(root, p, query, limit=8, source='all', mode='auto', papers=None, pass
         if r[2] == 'notes':
             locator.update(heading=r[3], start_line=r[5], end_line=r[6])
         else:
-            link = p2p.wikilink(vault, root / r[1], r[1]).split('|')[0][2:]
-            locator.update(page=r[4], start_offset=r[7], end_offset=r[8], open='[[' + link + '#page=' + str(r[4]) + ']]',
+            file = docs[r[1]]['file']
+            opener = ('[[' + p2p.wikilink(vault, file, file.name).split('|')[0][2:] + '#page=' + str(r[4]) + ']]'
+                      if file.resolve().is_relative_to(vault.resolve()) else file.as_uri() + '#page=' + str(r[4]))
+            locator.update(page=r[4], start_offset=r[7], end_offset=r[8], open=opener,
                            needs_visual_check=bool(r[12]))
         entry['passages'].append({'score': round(scores[i], 4), 'locator': locator, 'text': r[9]})
     results = list(grouped.values())[:limit]
@@ -295,7 +298,7 @@ def main(argv=None):
             cmd.add_argument('--paper', action='append', help='Restrict to a paper note (root-relative path); repeatable.')
             cmd.add_argument('--passages', type=int, default=3)
         if name == 'page':
-            cmd.add_argument('--pdf', required=True, help='Registered original (root-relative path).')
+            cmd.add_argument('--pdf', required=True, help='Registered original: copy path (root-relative) or linked target.')
             cmd.add_argument('--page', type=int, required=True)
     args = parser.parse_args(argv)
     try:
@@ -314,8 +317,10 @@ def main(argv=None):
             result = search(root, p, args.query, max(1, min(args.limit, 50)), args.source, args.mode,
                             set(args.paper or []), max(1, min(args.passages, 5)))
         else:
-            pdf = p2p.inside(root, args.pdf, 'PDF')
-            text = pdfs.text_command(p2p, root, pdf, 'auto', [args.page])
+            docs = current_documents(root, p)
+            if args.pdf not in docs or docs[args.pdf]['source'] != 'pdf':
+                raise ValueError('Not a registered original: ' + args.pdf)
+            text = pdfs.text_command(p2p, root, docs[args.pdf]['file'], 'auto', [args.page])
             result = {'status': 'ok', 'pdf': args.pdf, 'engine': text['engine'], 'pages': text['pages']}
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0

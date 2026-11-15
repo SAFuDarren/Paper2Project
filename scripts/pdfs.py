@@ -1,8 +1,9 @@
 """Original PDFs: scan a folder, read text, attach approved copies to paper notes, audit.
 
-Conventions: the preferred original of a paper note `Library/<D>/<F>/Papers/<stem>.md` is the
-byte-identical copy `Library/<D>/<F>/PDFs/<stem>.pdf`. Originals elsewhere are never moved or
-deleted. `.maintenance/pdf_attachments.json` registers each copy with its hashes and provenance.
+Conventions: an original is either copied byte-for-byte to `Library/<D>/<F>/PDFs/<stem>.pdf`
+beside the paper note `Library/<D>/<F>/Papers/<stem>.md` (mode "copy", the default) or linked where
+it already is (mode "link"). The user's original files are never moved, renamed, modified or
+deleted, and migrate refuses to move PDFs. `.maintenance/pdf_attachments.json` registers each copy with its hashes and provenance.
 Every language block of the note links the copy inside a `<!-- p2p:pdf -->` block. PDFs are
 sources, not graph nodes. Standard library only; PyMuPDF or `pdftotext` are used when present.
 """
@@ -346,18 +347,37 @@ def text_command(core, root, file, engine, pages=None):
     return {'status': 'text', 'file': str(file), **result}
 
 
-def pdf_block(core, vault, pdf_paths):
-    return [core.wikilink(vault, p, p.name) for p in pdf_paths]
+def locate(root, vault, item):
+    """File of a register entry: a managed copy (root-relative `path`) or a linked original (`target`)."""
+    if item.get('mode') == 'link':
+        return (vault / item['target']) if item.get('inside_vault') else Path(item['target'])
+    return root / item['path']
+
+
+def entry_key(item):
+    return item['target'] if item.get('mode') == 'link' else item['path']
+
+
+def entry_link(core, vault, item, file):
+    """Wikilink inside the vault; a file:// link for an original that lives outside it."""
+    if item.get('mode') == 'link' and not item.get('inside_vault'):
+        return '[' + file.name.replace('[', '(').replace(']', ')') + '](' + file.as_uri() + ')'
+    return core.wikilink(vault, file, file.name)
 
 
 def attach(core, root, p, pairs, apply):
-    """pairs: [(pdf file, paper note path)]. Copies bytes, registers, links in every language block."""
+    """pairs: [(pdf file, paper note path, mode)] with mode "copy" (default) or "link".
+    copy: byte-identical copy in the field's PDFs/; link: the original is registered where it is.
+    Either way the original file is never moved, renamed or modified."""
     vault = core.vault_base(root, p['vault_prefix'])
     register = load_register(root)
     library, papers_folder = p['layout']['library'], p['layout']['papers']
     plan, rows, writes = {}, [], {}
     owner = {f['sha256']: note for note, r in register['papers'].items() for f in r.get('files', [])}
-    for source, note in pairs:
+    for source, note, *rest in pairs:
+        mode = rest[0] if rest and rest[0] else 'copy'
+        if mode not in ('copy', 'link'):
+            raise ValueError('mode is "copy" or "link": ' + str(mode))
         source = Path(source).expanduser().absolute()
         note_path = core.inside(root, note, 'Paper note')
         parts = Path(note).parts
@@ -374,6 +394,17 @@ def attach(core, root, p, pairs, apply):
         digest = sha256(raw)
         if owner.get(digest) not in (None, note):
             raise ValueError('These PDF bytes are already the original of another note: ' + owner[digest])
+        if mode == 'link':
+            inside_vault = source.resolve().is_relative_to(vault.resolve())
+            target_text = source.resolve().relative_to(vault.resolve()).as_posix() if inside_vault else source.as_posix()
+            row = register['papers'].setdefault(note, {'status': 'available', 'files': [], 'preferred_pdf': target_text})
+            if not any(f.get('mode') == 'link' and f['target'] == target_text for f in row['files']):
+                row['files'].append({'mode': 'link', 'target': target_text, 'inside_vault': inside_vault, 'sha256': digest,
+                                     'pages': info.get('pages'), 'added': datetime.date.today().isoformat()})
+            row['status'] = 'available'
+            owner[digest] = note
+            rows.append({'pdf': str(source), 'note': note, 'link': target_text, 'action': 'link'})
+            continue
         target = root.joinpath(*parts[:3], 'PDFs', Path(note).stem + '.pdf')
         if target.exists() and sha256(target.read_bytes()) != digest:
             raise ValueError('A different PDF already occupies ' + target.relative_to(root).as_posix() +
@@ -391,11 +422,11 @@ def attach(core, root, p, pairs, apply):
         writes[target] = raw
         rows.append({'pdf': str(source), 'note': note, 'copy': rel_pdf, 'action': 'unchanged' if target.exists() else 'copy'})
     texts = {}
-    for note in sorted({n for _, n in pairs}):
+    for note in sorted({pair[1] for pair in pairs}):
         path = root / note
         text = core.raw_text(path)
-        files = [root / f['path'] for f in register['papers'][note]['files']]
-        new = put_pdf_block(text, pdf_block(core, vault, files))
+        items = register['papers'][note]['files']
+        new = put_pdf_block(text, [entry_link(core, vault, f, locate(root, vault, f)) for f in items])
         if new != text:
             plan[path] = new
             texts[path] = text
@@ -462,31 +493,35 @@ def audit(core, root, p, files, kinds):
             if row.get('files'):
                 errors.append('A missing-original record must not list files: ' + note)
             continue
-        if row.get('status') != 'available' or not row.get('files') or row.get('preferred_pdf') not in [f.get('path') for f in row['files']]:
+        if row.get('status') != 'available' or not row.get('files') or row.get('preferred_pdf') not in [entry_key(f) for f in row['files']]:
             errors.append('Invalid PDF register record: ' + note)
             continue
         available += 1
         text = core.raw_text(path).replace('\r\n', '\n')
         blocks = re.split(r'^---\s*$', core.split_front(text)[1], flags=re.M)
         for item in row['files']:
-            rel = item.get('path', '')
-            registered.add(rel)
-            pdf = root / rel
-            if Path(rel).parent != Path(note).parent.parent / 'PDFs' or Path(rel).suffix.lower() != '.pdf':
-                errors.append('PDF is outside its paper field PDFs folder: ' + rel)
+            linked = item.get('mode') == 'link'
+            pdf = locate(root, vault, item)
+            label = entry_key(item)
+            registered.add(pdf.resolve())
+            if not linked and (Path(label).parent != Path(note).parent.parent / 'PDFs' or Path(label).suffix.lower() != '.pdf'):
+                errors.append('PDF copy is outside its paper field PDFs folder: ' + label)
             if not pdf.is_file() or pdf.is_symlink():
-                errors.append('Registered PDF is missing: ' + rel)
+                errors.append(('Linked original is missing (it may have been moved or renamed outside Paper2Project; '
+                               'check it, then attach again): ' if linked else 'Registered PDF copy is missing: ') + label)
                 continue
             raw = pdf.read_bytes()
             if not raw.startswith(b'%PDF-') or sha256(raw) != item.get('sha256'):
-                errors.append('PDF bytes differ from the register (signature or hash): ' + rel)
-            target = core.wikilink(vault, pdf, pdf.name).split('|')[0]
+                errors.append(('Linked original changed since it was registered (not modified by Paper2Project; check the version, '
+                               'then attach again): ' if linked else 'PDF copy differs from the register (signature or hash): ') + label)
+            target = entry_link(core, vault, item, pdf)
+            target = target.split('|')[0] if target.startswith('[[') else target[target.index('](') + 2:-1]
             if any(target not in block for block in blocks):
                 errors.append('Original PDF is not linked in every language block: ' + note)
     library = set(core.layout_values(p, 'library'))
     for pdf in sorted(x for x in core.regular_files(root) if x.suffix.lower() == '.pdf'):
         rel = pdf.relative_to(root)
-        if rel.parts[0] in library and rel.as_posix() not in registered:
+        if rel.parts[0] in library and pdf.resolve() not in registered:
             warnings.append('Unregistered PDF in Library (attach it to its paper note with pdfs attach): ' + rel.as_posix())
     return errors, warnings, {'papers_with_original': available, 'registered_files': len(registered)}
 
@@ -503,7 +538,8 @@ def migrate_register(root, moved):
     papers = {}
     for note, row in data['papers'].items():
         for item in row.get('files', []):
-            item['path'] = remap.get(item['path'], item['path'])
+            if item.get('mode') != 'link':  # linked originals are never moved
+                item['path'] = remap.get(item['path'], item['path'])
         if row.get('preferred_pdf'):
             row['preferred_pdf'] = remap.get(row['preferred_pdf'], row['preferred_pdf'])
         papers[remap.get(note, note)] = row

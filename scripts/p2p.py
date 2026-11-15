@@ -702,6 +702,10 @@ def migrate_command(args):
             raise InputError('Destination exists or is used twice: ' + new)
         if dst.suffix.lower() != src.suffix.lower():
             raise InputError('A move keeps the file extension: ' + old + ' → ' + new)
+        if src.suffix.lower() == '.pdf':
+            # Paper originals are copied or linked, never moved; a note's registered copy follows its note.
+            raise InputError('PDFs are not moved by migrate (other notes or tools may point at them): ' + old +
+                             '. Copy or link it to its paper note with pdfs attach instead.')
         for part in Path(new).parts:
             profiles.safe_name(part)
         moved[src.resolve()] = dst.resolve()
@@ -711,6 +715,8 @@ def migrate_command(args):
     for src, dst in list(pairs):
         row = register['papers'].get(src.relative_to(root).as_posix()) if src.suffix.lower() == '.md' else None
         for item in (row or {}).get('files', []):
+            if item.get('mode') == 'link':
+                continue  # a linked original stays exactly where the user keeps it
             old_pdf = (root / item['path']).resolve()
             new_pdf = (dst.parent.parent / 'PDFs' / (dst.stem + old_pdf.suffix)).resolve()
             if old_pdf.is_file() and old_pdf not in moved and new_pdf != old_pdf:
@@ -852,8 +858,8 @@ def pdfs_command(args):
     plan = json.loads(Path(args.plan).read_text(encoding='utf-8')) if args.plan else {}
     items = plan.get('attach') if isinstance(plan, dict) else None
     if not isinstance(items, list) or not items or not all(isinstance(x, dict) and x.get('pdf') and x.get('note') for x in items):
-        raise InputError('pdfs attach needs --plan with {"attach": [{"pdf": file, "note": "Library/.../Papers/Note.md"}]}.')
-    result = pdfs.attach(core, root, profile_at(root), [(x['pdf'], x['note']) for x in items], args.apply)
+        raise InputError('pdfs attach needs --plan with {"attach": [{"pdf": file, "note": "Library/.../Papers/Note.md", "mode": "copy" or "link"}]}.')
+    result = pdfs.attach(core, root, profile_at(root), [(x['pdf'], x['note'], x.get('mode')) for x in items], args.apply)
     if args.apply:
         result['navigation'] = apply_index(root, profile_at(root), True)
     print(dump(result))
@@ -1334,6 +1340,7 @@ def render_command(args):
         replacing=old;card['id']=scalar(split_front(old)[0],'p2p_id') or card.get('id')
     if not card.get('id'):card['id']=str(uuid.uuid4())
     pdf=card.get('pdf')
+    if card.get('pdf_mode') not in (None,'copy','link'):raise InputError('"pdf_mode" is "copy" (default) or "link".')
     if pdf is not None and (args.kind!='paper' or not isinstance(pdf,str) or not pdfs.inspect_pdf(Path(pdf).expanduser().read_bytes()).get('is_pdf')):
         raise InputError('"pdf" must name an existing PDF file, for paper cards only.')
     text=i18n.render(args.kind,card,profile)
@@ -1358,7 +1365,7 @@ def render_command(args):
         if dest.read_text(encoding='utf-8')!=text:raise InputError('Note readback failed.')
         result={'status':'rendered','path':str(dest),'id':card['id'],'languages':profile['note_languages'],'content_sha256':digest(text.encode('utf-8'))}
         # Path-derived navigation (field/direction/Library indexes) is written by the program, not the agent.
-        if pdf:result['original']=pdfs.attach(sys.modules[__name__],root,saved,[(pdf,dest.relative_to(root).as_posix())],True)
+        if pdf:result['original']=pdfs.attach(sys.modules[__name__],root,saved,[(pdf,dest.relative_to(root).as_posix(),card.get('pdf_mode'))],True)
         result['navigation']=apply_index(root,saved,True)
     print(dump(result));return 0
 
@@ -1520,7 +1527,7 @@ def main(argv=None):
     cmd.add_argument('action',choices=('scan','text','attach'));cmd.add_argument('--root',required=True)
     cmd.add_argument('--from',dest='source',help='scan: folder of PDFs');cmd.add_argument('--file',help='text: one PDF')
     cmd.add_argument('--engine',choices=('auto','pymupdf','pdftotext','builtin'),default='auto');cmd.add_argument('--pages',help='text: e.g. 1,2,5')
-    cmd.add_argument('--plan',help='attach: {"attach": [{"pdf": file, "note": root-relative paper note}]}');cmd.add_argument('--apply',action='store_true')
+    cmd.add_argument('--plan',help='attach: {"attach": [{"pdf": file, "note": root-relative paper note, "mode": "copy"|"link"}]}');cmd.add_argument('--apply',action='store_true')
     cmd=sub.add_parser('relate',help='Preview or write registered research/concept connections from a {"relations": [...]} plan.')
     cmd.add_argument('--root',required=True);cmd.add_argument('--plan',required=True);cmd.add_argument('--apply',action='store_true')
     cmd=sub.add_parser('repo',help='Read-only inventory of a results repository: commit, remote, documents, results, figures.')

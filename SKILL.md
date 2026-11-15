@@ -55,10 +55,10 @@ Every writing command previews without `--apply`. `inspect/check/locales` and di
 | `render --apply` | A new note at the path derived from the card (or `--output`), a UUID when the card has no `id`, then `index` |
 | `index --apply` | The `<!-- p2p:index -->` lists: field → papers/concepts/directions, direction → project homes, project home → records, Library → fields, Projects → directions; creates a missing field index |
 | `tag --plan roles.json --apply` | Appends the approved role tag lines; refuses a conflicting role; then `index` |
-| `migrate --map moves.json --apply` | Moves files, rewrites every link to them vault-wide, keeps before-copies and the map in `.maintenance/migrations/`, then `index` |
+| `migrate --map moves.json --apply` | Moves notes, rewrites every link to them vault-wide, keeps before-copies and the map in `.maintenance/migrations/`, then `index`; refuses to move PDFs |
 | `views --apply` | Merges Research Map/Full Network into `.obsidian/bookmarks.json` (backup, no deletion); the only writer of Obsidian settings |
 | `pdfs scan` / `pdfs text` | Read-only: intake queue (hash, pages, DOI/arXiv, duplicates, existing notes) and page text for reading |
-| `pdfs attach --plan --apply` | Byte-identical copy into the field's `PDFs/`, register, link in every language block (also via a paper card's `"pdf"`) |
+| `pdfs attach --plan --apply` | Copy (default) or link the original, register it, link it in every language block (also via a paper card's `"pdf"`/`"pdf_mode"`); original files are never moved or changed |
 | `relate --plan --apply` | A recorded connection (literature, relevance, missing step, papers) in both endpoints and `.maintenance/relations.json` |
 | `repo scan` | Read-only: results repository commit, remote (no credentials) and citable files; cards cite them through `"evidence"` |
 | `brief`, `snapshot --out`, `diff --baseline` | Context and next commands; before-copies with a link inventory; changed files, links, roles, views and registers |
