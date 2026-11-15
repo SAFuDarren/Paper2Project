@@ -79,7 +79,8 @@ class WorkspaceTests(unittest.TestCase):
                           'direction':'Sequence Models','basis':'Supplied synthetic classification fixture, not evidence verification.'}]
         (self.root/'.paper2project.json').write_text(json.dumps(cfg))
         p=self.paper()
-        self.assertEqual(self.cli('check','--root',str(self.root))['warnings'],[])
+        warnings=self.cli('check','--root',str(self.root))['warnings']
+        self.assertFalse([x for x in warnings if 'naming basis' in x])
         p.rename(p.with_name('Invented Direction - Example.md'))
         errors=self.cli('check','--root',str(self.root),expected=1)['errors']
         self.assertTrue(any('prefix differs from registered' in x for x in errors))
@@ -215,9 +216,13 @@ class WorkspaceTests(unittest.TestCase):
             paper_text+='\n## '+heading+'\n\n不作科学主张。 '+link(concept)+' '+link(home)+'\n'
         self.put(paper+'.md',paper_text+'\n#paper\n')
         result=self.cli('check','--root',str(self.root))
-        self.assertEqual(result['status'],'passed')
+        self.assertEqual(result['structural_status'],'passed')
         self.assertEqual(result['roles'],{'field':2,'paper':1,'concept':2,'direction':2,'project':1,'project-record':4})
-        self.assertEqual(result['warnings'],[])
+        # Hand-written links between directions, concepts and a cross-field project carry no registered evidence.
+        self.assertEqual(sorted(x.split(': ',1)[1] for x in result['warnings']),
+                         sorted([concept+'.md ↔ '+other+'.md' if concept<other else other+'.md ↔ '+concept+'.md',
+                                 one+'.md ↔ '+two+'.md' if one<two else two+'.md ↔ '+one+'.md',
+                                 home+'.md ↔ '+two+'.md' if home<two else two+'.md ↔ '+home+'.md']))
         output=self.base/'complete.jsonl'
         self.cli('export','--root',str(self.root),'--output',str(output))
         docs=[json.loads(x) for x in output.read_text().splitlines()[1:]]
@@ -229,7 +234,7 @@ class WorkspaceTests(unittest.TestCase):
         old.rename(new)
         for p in self.root.rglob('*.md'):
             p.write_text(p.read_text().replace(link(concept),link(concept+' Renamed')))
-        self.assertEqual(self.cli('check','--root',str(self.root))['status'],'passed')
+        self.assertEqual(self.cli('check','--root',str(self.root))['structural_status'],'passed')
         after=self.base/'moved.jsonl'
         self.cli('export','--root',str(self.root),'--output',str(after))
         moved=[json.loads(x) for x in after.read_text().splitlines()[1:] if json.loads(x)['id']=='concept-stable'][0]

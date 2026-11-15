@@ -72,9 +72,37 @@ def normalize(raw):
         if not isinstance(layout,dict) or set(layout)!=expected or set(layout['groups'])!={'problem','methods','results','extensions'}:raise ValueError('Layout needs canonical role mappings and four typed groups.')
         for name in [v for k,v in layout.items() if k!='groups']+list(layout['groups'].values()):safe_name(name)
         if layout['library']==layout['projects'] or layout['papers']==layout['concepts'] or len(set(layout['groups'].values()))!=4:raise ValueError('Layout roles must stay distinct.')
+    # User extension configuration (embedding, databases, other slots) is preserved verbatim.
+    # The core never activates it; it only refuses credentials stored in the profile.
     slots=p['extensions']
-    if set(slots)!={'embedding','rag','agent','knowledge_store'} or not all(isinstance(v,dict) and set(v)=={'enabled','provider'} and v.get('enabled') is False and v.get('provider') is None for v in slots.values()):raise ValueError('Extensions are contracts only; keep enabled=false, provider=null, with no credential fields.')
+    if not isinstance(slots,dict) or not all(isinstance(k,str) and k and isinstance(v,dict) and isinstance(v.get('enabled'),bool) and (v.get('provider') is None or isinstance(v.get('provider'),str)) for k,v in slots.items()):
+        raise ValueError('Each extension slot needs enabled (true/false) and provider (string or null); other keys are kept as supplied.')
+    secret=find_secret(slots)
+    if secret:raise ValueError('Credential-like key in extensions ('+secret+'); keep secrets in your adapter or environment and store only a reference such as "'+secret.split('.')[-1]+'_env".')
     return p
+
+
+SECRET=re.compile(r'(?:^|[_-])(?:api[_-]?key|apikey|secret|client[_-]?secret|password|passwd|token|access[_-]?token|auth[_-]?token|credentials?|private[_-]?key)$',re.I)
+
+
+def find_secret(value,prefix=''):
+    if isinstance(value,dict):
+        for k,v in value.items():
+            name=(prefix+'.' if prefix else '')+str(k)
+            if SECRET.search(str(k)) and not str(k).lower().endswith('_env'):return name
+            found=find_secret(v,name)
+            if found:return found
+    elif isinstance(value,list):
+        for v in value:
+            found=find_secret(v,prefix)
+            if found:return found
+    return None
+
+
+def inert_extensions(raw):
+    """Onboarding and preference signals never switch an extension on."""
+    slots=raw.get('extensions',{}) if isinstance(raw,dict) else {}
+    return not isinstance(slots,dict) or not any(isinstance(v,dict) and (v.get('enabled') is True or v.get('provider') is not None) for v in slots.values())
 
 
 def load(path=None):
@@ -105,6 +133,9 @@ def resolve(saved,signals,scope='workspace'):
         if source in ('memory','context'):
             for key in list(values):
                 if key not in SOFT:ignored.append({'source':source,'key':key,'reason':'Paths, taxonomy and external actions need explicit selection.'});values.pop(key)
+        if source!='saved' and 'extensions' in values:
+            if not inert_extensions(values) or any(set(v)-{'enabled','provider'} for v in values['extensions'].values() if isinstance(v,dict)):
+                raise ValueError('Preference signals cannot configure extensions; the user sets them in the workspace profile.')
         if 'language' in values and 'note_languages' not in values:
             values['note_languages']=['en','zh'] if values['language']=='en-zh' else [values['language']]
         if 'note_languages' in values:

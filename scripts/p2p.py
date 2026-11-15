@@ -3,6 +3,7 @@
 
 import argparse
 import hashlib
+import uuid
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -22,6 +23,10 @@ if __name__ == '__main__' and sys.getfilesystemencoding().lower() in ('ascii', '
 import profiles
 import i18n
 import discovery
+import pdfs
+import relations
+import results
+import state
 
 for stream in (sys.stdout, sys.stderr):
     if hasattr(stream, "reconfigure"):
@@ -131,14 +136,43 @@ def visible_text(text):
     return ''.join(lines)
 
 
+def front_tags(front):
+    """Tags declared in YAML frontmatter (`tags:`/`tag:`), as Obsidian reads them."""
+    found = []
+    lines = front.splitlines()
+    for i, line in enumerate(lines):
+        m = re.match(r'^(?:tags|tag)\s*:\s*(.*?)\s*$', line)
+        if not m:
+            continue
+        value = m[1]
+        if value:
+            found += re.split(r'[,\s]+', value.strip('[]'))
+        else:
+            for item in lines[i+1:]:
+                entry = re.match(r'^\s+-\s*(.+?)\s*$', item)
+                if not entry:
+                    break
+                found.append(entry[1])
+    return {x.strip('\'"').lstrip('#') for x in found if x.strip('\'"').lstrip('#')}
+
+
+def note_tags(text):
+    """Frontmatter tags plus body tags outside code, matching Obsidian's `tag:` search."""
+    front, body = split_front(text)
+    tags = front_tags(front)
+    tags.update(re.findall(r'(?:(?<=\s)|^)#([\w/-]*[^\W\d][\w/-]*)', visible_text(body), re.M))
+    return {x.casefold() for x in tags}
+
+
+def role_kinds(tags):
+    # Obsidian's tag:#paper also matches nested tags such as #paper/selected.
+    return [k for k, tag in TAGS.items() if any(t == tag or t.startswith(tag + '/') for t in tags)]
+
+
 def role(text, path, root):
-    body = visible_text(split_front(text)[1])
-    # Adopt existing tag-only lines such as '#paper #selected' without rewriting notes.
-    tag_names = set()
-    for line in body.splitlines():
-        if re.fullmatch(r'\s*#[\w/-]+(?:\s+#[\w/-]+)*\s*', line):
-            tag_names.update(re.findall(r'#([\w/-]+)', line))
-    kinds = [k for k, tag in TAGS.items() if tag in tag_names]
+    # Adopt existing tags (tag-only lines, inline or frontmatter) without rewriting notes;
+    # an extra organizational tag such as #selected does not become a second role.
+    kinds = role_kinds(note_tags(text))
     if len(kinds) > 1:
         return 'multiple'
     if kinds:
@@ -153,7 +187,9 @@ def links(text):
     body = visible_text(split_front(text)[1])
     out = []
     for m in re.finditer(r'(?<!!)\[\[([^\]\n]+)\]\]', body):
+        # Inside Markdown tables Obsidian requires the alias pipe escaped as `\|`.
         destination, _, label = m[1].partition('|')
+        destination = destination[:-1] if destination.endswith('\\') else destination
         target, _, anchor = destination.partition('#')
         out.append({'target': target, 'anchor': anchor, 'label': label or None, 'format': 'wiki'})
     # Conventional local Markdown links; remote URLs are handled as citations.
@@ -167,6 +203,21 @@ def links(text):
     return out
 
 
+SHORT_LINKS = {}
+BASENAMES = {}
+
+
+def basename_index(vault):
+    key = vault.resolve()
+    if key not in BASENAMES:
+        names = {}
+        for path in regular_files(vault):
+            name = path.stem if path.suffix.lower() == '.md' else path.name
+            names.setdefault(name.casefold(), []).append(path)
+        BASENAMES[key] = names
+    return BASENAMES[key]
+
+
 def resolve_link(link, source, vault):
     target = unquote(link['target'])
     if target.startswith('/'):
@@ -177,6 +228,14 @@ def resolve_link(link, source, vault):
         p = (vault if link['format'] == 'wiki' else source.parent) / target
         if not p.exists() and p.suffix.lower() != '.md':
             p = Path(str(p) + '.md')
+        if not p.exists() and link['format'] == 'wiki' and '/' not in target:
+            # Obsidian resolves a bare [[Name]] by file name anywhere in the vault.
+            matches = basename_index(vault).get(target.casefold(), [])
+            if len(matches) > 1:
+                raise InputError('Ambiguous short link (several notes share this name): ' + target)
+            if matches:
+                SHORT_LINKS[vault.resolve()] = SHORT_LINKS.get(vault.resolve(), 0) + 1
+                p = matches[0]
     resolved = p.resolve()
     if not resolved.is_relative_to(vault.resolve()):
         raise InputError('Link escapes the vault: ' + target)
@@ -223,14 +282,654 @@ def query(prefix, full=False):
     return ('path:"' + prefix + '/" ' if prefix else '') + clause
 
 
+VIEW_GROUP = 'Paper2Project'
+VIEWS = (('Research Map', False), ('Full Network', True))
+# Obsidian's own defaults for a saved graph view; only search and colorGroups are ours.
+GRAPH_DISPLAY = {'collapse-filter': False, 'showTags': False, 'showAttachments': False,
+                 'hideUnresolved': True, 'showOrphans': True, 'collapse-color-groups': False,
+                 'collapse-display': True, 'showArrow': False, 'textFadeMultiplier': 0,
+                 'nodeSizeMultiplier': 1, 'lineSizeMultiplier': 1, 'collapse-forces': True,
+                 'centerStrength': 0.518713248970312, 'repelStrength': 10, 'linkStrength': 1,
+                 'linkDistance': 250, 'scale': 1, 'close': False}
+
+
+def color_groups(p, full):
+    roles = list(TAGS) if full else ['field', 'direction', 'project']
+    return [{'query': 'tag:#' + TAGS[r], 'color': {'a': 1, 'rgb': int(p['palette'][r][1:], 16)}} for r in roles]
+
+
+def walk_bookmarks(items):
+    for item in items:
+        yield item
+        if isinstance(item, dict) and item.get('type') == 'group' and isinstance(item.get('items'), list):
+            yield from walk_bookmarks(item['items'])
+
+
+def plan_views(root, p, now):
+    """Merge the two graph views and the reading entry into the vault's bookmarks."""
+    vault = vault_base(root, p['vault_prefix'])
+    config = vault / '.obsidian'
+    if config.is_symlink() or (config / 'bookmarks.json').is_symlink():
+        raise InputError('Obsidian configuration must not be a symlink.')
+    path = config / 'bookmarks.json'
+    raw = path.read_bytes() if path.is_file() else None
+    data = json.loads(raw.decode('utf-8')) if raw else {'items': []}
+    if (not isinstance(data, dict) or not isinstance(data.get('items'), list)
+            or not all(isinstance(x, dict) for x in walk_bookmarks(data['items']))):
+        raise InputError('Unrecognized bookmarks.json; left unchanged: ' + str(path))
+    wanted = [{'type': 'graph', 'title': title, 'search': query(p['vault_prefix'], full),
+               'colorGroups': color_groups(p, full)} for title, full in VIEWS]
+    home = ((p['vault_prefix'] + '/') if p['vault_prefix'] else '') + p['layout']['home'] + '.md'
+    group = next((x for x in data['items'] if x.get('type') == 'group' and x.get('title') == VIEW_GROUP), None)
+    inside = {id(x) for x in walk_bookmarks([group])} if group else set()
+    outside = [x for x in walk_bookmarks(data['items']) if id(x) not in inside]
+    actions = []
+    if group is None:
+        group = {'type': 'group', 'ctime': now, 'items': [], 'title': VIEW_GROUP}
+        data['items'].append(group)
+    for view in wanted:
+        same = [x for x in outside if x.get('type') == 'graph' and isinstance(x.get('options'), dict)
+                and x['options'].get('search') == view['search']]
+        mine = next((x for x in group['items'] if x.get('type') == 'graph' and x.get('title') == view['title']), None)
+        if same and mine is None:
+            actions.append({'view': view['title'], 'action': 'kept_existing', 'title': same[0].get('title')})
+            continue
+        if mine is None:
+            mine = {'type': 'graph', 'ctime': now, 'title': view['title'], 'options': dict(GRAPH_DISPLAY)}
+            group['items'].append(mine)
+            actions.append({'view': view['title'], 'action': 'added'})
+        else:
+            options = mine.setdefault('options', dict(GRAPH_DISPLAY))
+            if options.get('search') == view['search'] and options.get('colorGroups') == view['colorGroups']:
+                actions.append({'view': view['title'], 'action': 'unchanged'})
+                continue
+            actions.append({'view': view['title'], 'action': 'updated'})
+        # Keep the user's layout/forces; refresh only the scope and role colors.
+        mine['options'].update(search=view['search'], colorGroups=view['colorGroups'])
+    if (root / (p['layout']['home'] + '.md')).is_file():
+        known = [x for x in walk_bookmarks(data['items']) if x.get('type') == 'file' and x.get('path') == home]
+        if not known:
+            group['items'].append({'type': 'file', 'ctime': now, 'path': home})
+            actions.append({'view': home, 'action': 'added'})
+    if not group['items']:
+        data['items'].remove(group)
+    nested = [str(x.relative_to(vault)) for x in [root, *root.parents] if x != vault and x.is_relative_to(vault) and (x / '.obsidian').is_dir()]
+    return path, raw, data, actions, nested, wanted
+
+
+def apply_views(root, p, apply):
+    import time
+    path, raw, data, actions, nested, wanted = plan_views(root, p, int(time.time() * 1000))
+    changed = any(x['action'] in ('added', 'updated') for x in actions)
+    result = {'status': 'preview', 'bookmarks': str(path), 'actions': actions,
+              'views': {x['title']: x['search'] for x in wanted}}
+    if nested:
+        result['warning'] = ('Nested Obsidian vault(s) inside this vault: ' + ', '.join(nested) +
+                             '. Bookmarks go to the vault that contains vault_prefix; if you open the nested folder as its own vault, set vault_prefix to match it.')
+    if not apply or not changed:
+        result['status'] = 'unchanged' if apply else 'preview'
+        return result
+    path.parent.mkdir(exist_ok=True)
+    current = path.read_bytes() if path.is_file() else None
+    if current != raw:
+        raise InputError('bookmarks.json changed while planning; nothing written. Run views again.')
+    if raw is not None:
+        backup = path.with_name('bookmarks.json.p2p-backup-' + digest(raw)[:12])
+        if not backup.exists():
+            backup.write_bytes(raw)
+        result['backup'] = str(backup)
+    payload = json.dumps(data, ensure_ascii=False, indent=2).encode('utf-8')
+    temp = path.with_name('bookmarks.json.p2p-tmp')
+    temp.write_bytes(payload)
+    os.replace(temp, path)
+    if path.read_bytes() != payload:
+        raise InputError('bookmarks.json readback failed.')
+    result.update(status='written', next='If Obsidian already has this vault open, reopen the vault (or restart Obsidian) to load the bookmarks. If they are missing afterwards, close Obsidian and run views --apply again.')
+    return result
+
+
+def views_command(args):
+    root = no_symlink_root(Path(args.root))
+    if not (root / CONFIG).is_file():
+        raise InputError('Initialize or adopt the selected workspace before creating views.')
+    print(dump(apply_views(root, profile_at(root), args.apply)))
+    return 0
+
+
+MANAGED = ('<!-- p2p:index -->', '<!-- /p2p:index -->')
+EVIDENCE = ('<!-- p2p:evidence -->', '<!-- /p2p:evidence -->')
+TAG_LINE = r'\s*#[\w/-]+(?:\s+#[\w/-]+)*\s*'
+
+
+def raw_text(path):
+    """Exact file text, keeping CRLF line endings that read_text() would translate."""
+    return path.read_bytes().decode('utf-8')
+
+
+def wikilink(vault, path, label):
+    rel = path.relative_to(vault).as_posix()
+    rel = rel[:-3] if rel.lower().endswith('.md') else rel
+    return '[[' + rel + '|' + (' '.join(re.sub(r'[\[\]|#^]', ' ', label).split()) or path.stem) + ']]'
+
+
+def note_title(text, path):
+    m = re.search(r'^#\s+(.+?)\s*$', visible_text(split_front(text)[1]), re.M)
+    return m[1] if m else path.stem
+
+
+def put_managed(text, contents, marks=MANAGED):
+    """Replace, or insert before the closing tag line, one managed block per language block."""
+    newline = '\r\n' if '\r\n' in text else '\n'
+    text = text.replace('\r\n', '\n')
+    body = split_front(text)[1]
+    head = text[:len(text) - len(body)]
+    seps = list(re.finditer(r'^---[ \t]*$', body, re.M))
+    cuts = [0, *[x for m in seps for x in (m.start(), m.end())], len(body)]
+    segments = [body[cuts[i]:cuts[i+1]] for i in range(0, len(cuts), 2)]
+    pattern = re.escape(marks[0]) + r'.*?' + re.escape(marks[1])
+    out = []
+    for i, segment in enumerate(segments):
+        lines = contents[i] if i < len(contents) else contents[0]
+        block = marks[0] + '\n' + '\n'.join(lines) + ('\n' if lines else '') + marks[1]
+        if re.search(pattern, segment, re.S):
+            segment = re.sub(pattern, lambda _: block, segment, count=1, flags=re.S)
+        else:
+            stripped = segment.rstrip('\n')
+            kept = stripped.split('\n')
+            tags = []
+            while kept and (not kept[-1].strip() or re.fullmatch(TAG_LINE, kept[-1])):
+                line = kept.pop()
+                if line.strip():
+                    tags.insert(0, line)
+            segment = ('\n'.join(kept).rstrip('\n') + '\n\n' + block + ('\n\n' + '\n'.join(tags) if tags else '')
+                       + (segment[len(stripped):] or '\n'))
+        out.append(segment)
+    joined = out[0] + ''.join(body[m.start():m.end()] + out[i+1] for i, m in enumerate(seps))
+    return (head + joined).replace('\n', newline)
+
+
+def generated_note(title, p, contents, tag):
+    fields = {'p2p_id': str(uuid.uuid4()), 'p2p_languages': p['note_languages'], 'p2p_generated': True}
+    front = '---\n' + ''.join(k + ': ' + json.dumps(v, ensure_ascii=False) + '\n' for k, v in fields.items()) + '---\n\n'
+    titles = title if isinstance(title, list) else [title] * len(contents)
+    blocks = ['# ' + t + '\n\n' + MANAGED[0] + '\n' + '\n'.join(lines) + '\n' + MANAGED[1] for t, lines in zip(titles, contents)]
+    return front + i18n.join_blocks(blocks) + ('\n#' + tag + '\n' if tag else '')
+
+
+def grouped_lines(p, language, groups):
+    """Localized label + link list per group; identical link sets in every language."""
+    loc = i18n.locale(language, p)
+    colon = '：' if language.startswith('zh') else ':'
+    lines = []
+    for label, items in groups:
+        if items:
+            lines += ([''] if lines else []) + ['**' + label(loc) + colon + '**'] + ['- ' + x for x in items]
+    return lines
+
+
+def index_plan(root, p):
+    """Navigation links that follow from paths alone: field → papers/concepts/directions,
+    direction → project homes, Library → fields, Projects → directions. Returns {path: text}."""
+    layout, vault = p['layout'], vault_base(root, p['vault_prefix'])
+    texts = {f: raw_text(f) for f in markdown_files(root)}
+    kinds = {f: role(t, f, root) for f, t in texts.items()}
+    title = lambda f: note_title(texts[f], f)
+    fields, directions = {}, {}
+    for f, kind in sorted(kinds.items(), key=lambda kv: kv[0].as_posix()):
+        parts = f.relative_to(root).parts
+        area = {'paper': ('library', 'papers'), 'concept': ('library', 'concepts')}.get(kind)
+        if area and len(parts) == 5 and parts[0] == layout['library'] and parts[3] == layout[area[1]]:
+            fields.setdefault(parts[1:3], {'paper': [], 'concept': [], 'direction': []})[kind].append(f)
+        if kind == 'direction' and len(parts) == 5 and parts[0] == layout['projects']:
+            fields.setdefault(parts[1:3], {'paper': [], 'concept': [], 'direction': []})['direction'].append(f)
+            directions.setdefault(f.parent, [f, []])
+        if kind == 'field' and len(parts) == 4 and parts[0] == layout['library'] and f.stem == parts[2]:
+            fields.setdefault(parts[1:3], {'paper': [], 'concept': [], 'direction': []})
+    for f, kind in sorted(kinds.items(), key=lambda kv: kv[0].as_posix()):
+        if kind == 'project' and f.parent.parent in directions:
+            directions[f.parent.parent][1].append(f)
+    plan, base = {}, root
+
+    def languages(f):
+        if f not in texts:
+            return p['note_languages']
+        front, body = split_front(texts[f])
+        return note_languages(front, body, p, kinds[f])
+
+    def update(f, groups, kind, heading):
+        contents = [grouped_lines(p, lang, groups) for lang in languages(f)]
+        if f in texts:
+            if kinds[f] != kind or not (any(contents) or MANAGED[0] in texts[f]):
+                return  # never rewrite an untagged/other note; never add an empty list
+            new = put_managed(texts[f], contents)
+            if new != texts[f]:
+                plan[f] = new
+        elif any(lines for lines in contents):
+            plan[f] = generated_note(heading, p, contents, TAGS.get(kind) if kind else None)
+
+    link = lambda f: wikilink(vault, f, title(f) if f in texts else f.stem)
+    for (discipline, field), members in sorted(fields.items()):
+        index = base / layout['library'] / discipline / field / (field + '.md')
+        update(index, [(lambda loc: loc['sections']['papers'], [link(x) for x in members['paper']]),
+                       (lambda loc: loc['sections']['related_concepts'], [link(x) for x in members['concept']]),
+                       (lambda loc: loc['sections']['opportunities'], [link(x) for x in members['direction']])],
+               'field', field)
+    for folder, (note, homes) in sorted(directions.items(), key=lambda kv: kv[0].as_posix()):
+        update(note, [(lambda loc: loc['ui']['projects'], [link(x) for x in homes])], 'direction', note.stem)
+    # A project home lists its internal records by typed group (navigation, not graph edges).
+    for home in sorted((f for f, kind in kinds.items() if kind == 'project'), key=lambda x: x.as_posix()):
+        records = {g: sorted((r for r, kind in kinds.items() if kind == 'project-record' and r.parent == home.parent / name), key=lambda x: x.as_posix())
+                   for g, name in layout['groups'].items()}
+        update(home, [((lambda n: lambda loc: n)(layout['groups'][g]), [link(x) for x in records[g]])
+                      for g in ('problem', 'methods', 'results', 'extensions')], 'project', home.stem)
+    for area, label in (('library', 'library'), ('projects', 'projects')):
+        entries = {}
+        for (discipline, field), members in fields.items():
+            if area == 'library':
+                index = base / layout['library'] / discipline / field / (field + '.md')
+                if kinds.get(index) == 'field' or index in plan:
+                    entries.setdefault(discipline, []).append(index)
+            else:
+                entries.setdefault(discipline, []).extend(members['direction'])
+        groups = [((lambda d: lambda loc: d)(d), [link(x) for x in sorted(entries[d], key=lambda x: x.as_posix())]) for d in sorted(entries) if entries[d]]
+        note = base / layout[area] / (layout[area] + '.md')
+        contents = [grouped_lines(p, lang, groups) for lang in languages(note)]
+        if note in texts and kinds[note] is None and (groups or MANAGED[0] in texts[note]):
+            new = put_managed(texts[note], contents)
+            if new != texts[note]:
+                plan[note] = new
+        elif note not in texts and groups:
+            plan[note] = generated_note([i18n.locale(x, p)['ui'][label] for x in p['note_languages']], p, contents, None)
+    return plan
+
+
+def write_texts(plan, before):
+    """Write planned texts after confirming nothing changed since planning; read each back."""
+    for path in plan:
+        if (raw_text(path) if path.exists() else None) != before.get(path):
+            raise InputError('Changed while planning; nothing written. Run again: ' + str(path))
+    for path, text in plan.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temp = path.with_name(path.name + '.p2p-tmp')
+        with temp.open('w', encoding='utf-8', newline='') as out:
+            out.write(text)
+        os.replace(temp, path)
+        if raw_text(path) != text:
+            raise InputError('Readback failed: ' + str(path))
+
+
+def apply_index(root, p, apply):
+    plan = index_plan(root, p)
+    before = {x: (raw_text(x) if x.exists() else None) for x in plan}
+    changes = [{'path': x.relative_to(root).as_posix(), 'action': 'update' if before[x] is not None else 'create'}
+               for x in sorted(plan, key=lambda x: x.as_posix())]
+    if apply:
+        write_texts(plan, before)
+    return {'status': ('written' if plan else 'unchanged') if apply else 'preview', 'changes': changes}
+
+
+def index_command(args):
+    root = no_symlink_root(Path(args.root))
+    if not (root / CONFIG).is_file():
+        raise InputError('Initialize or adopt the selected workspace before building indexes.')
+    print(dump(apply_index(root, profile_at(root), args.apply)))
+    return 0
+
+
+def inside(root, relative, label):
+    path = root / relative
+    if Path(relative).is_absolute() or '\\' in relative or not path.resolve().is_relative_to(root.resolve()):
+        raise InputError(label + ' must be a root-relative path with forward slashes: ' + relative)
+    if any(x.is_symlink() for x in [path, *path.parents] if x.is_relative_to(root)):
+        raise InputError(label + ' must not go through a symlink: ' + relative)
+    return path
+
+
+def tag_command(args):
+    """Append the role tags the user approved; never rewrites note bodies."""
+    root = no_symlink_root(Path(args.root))
+    if not (root / CONFIG).is_file():
+        raise InputError('Initialize or adopt the selected workspace before tagging notes.')
+    p = profile_at(root)
+    plan = json.loads(Path(args.plan).read_text(encoding='utf-8'))
+    roles = plan.get('roles') if isinstance(plan, dict) else None
+    if not isinstance(roles, dict) or not roles:
+        raise InputError('Plan needs {"roles": {"relative/path.md": "paper|concept|field|direction|project"}}.')
+    changes, before, rows = {}, {}, []
+    for relative, kind in sorted(roles.items()):
+        if kind not in TAGS:
+            raise InputError('Unknown role for ' + relative + ': ' + str(kind))
+        path = inside(root, relative, 'Tag target')
+        if not path.is_file() or path.suffix.lower() != '.md':
+            raise InputError('Tag target must be an existing Markdown note: ' + relative)
+        text = raw_text(path)
+        current = role(text, path, root)
+        if current == kind:
+            rows.append({'path': relative, 'role': kind, 'action': 'unchanged'})
+            continue
+        if current is not None:
+            raise InputError('Note already has role ' + current + ', not ' + kind + '; nothing written: ' + relative)
+        newline = '\r\n' if '\r\n' in text else '\n'
+        changes[path] = text.rstrip('\r\n') + newline + newline + '#' + TAGS[kind] + newline
+        before[path] = text
+        rows.append({'path': relative, 'role': kind, 'action': 'tag'})
+    result = {'status': 'preview', 'changes': rows}
+    if args.apply:
+        write_texts(changes, before)
+        result.update(status='written' if changes else 'unchanged', navigation=apply_index(root, p, True))
+    print(dump(result))
+    return 0
+
+
+def outside_code(text, fn):
+    """Apply fn to body text outside fenced and inline code (the same spans links() reads)."""
+    body = split_front(text)[1]
+    out, fence = [text[:len(text) - len(body)]], None
+    for line in body.splitlines(keepends=True):
+        mark = re.match(r'^\s*(`{3,}|~{3,})', line)
+        if mark:
+            token = mark[1]
+            fence = token if fence is None else (None if token[0] == fence[0] and len(token) >= len(fence) else fence)
+            out.append(line)
+        elif fence:
+            out.append(line)
+        else:
+            pieces = re.split(r'(`+[^`]*`+)', line)
+            out.append(''.join(x if i % 2 else fn(x) for i, x in enumerate(pieces)))
+    return ''.join(out)
+
+
+def rewrite_links(text, old_source, new_source, vault, moved):
+    """Point links at moved files: wiki links become full vault-relative paths, Markdown links stay relative."""
+    def find(target, base, wiki):
+        p = base / target
+        if not p.exists() and p.suffix.lower() != '.md':
+            p = Path(str(p) + '.md')
+        if not p.exists() and wiki and '/' not in target:
+            matches = basename_index(vault).get(target.casefold(), [])
+            p = matches[0] if len(matches) == 1 else p
+        return p.resolve() if p.exists() else None
+
+    def wiki(m):
+        destination, bar, label = m[2].partition('|')
+        escaped = destination.endswith('\\')
+        target, hashmark, anchor = (destination[:-1] if escaped else destination).partition('#')
+        found = find(target, vault, True) if target else None
+        if found is None or found not in moved:
+            return m[0]
+        new = moved[found].relative_to(vault.resolve()).as_posix()
+        if not target.lower().endswith('.md') and new.lower().endswith('.md'):
+            new = new[:-3]
+        return m[1] + '[[' + new + hashmark + anchor + (('\\' if escaped else '') + '|' + label if bar else '') + ']]'
+
+    def markdown(m):
+        raw = m[2].strip('<>')
+        if urlparse(raw).scheme or raw.startswith('//'):
+            return m[0]
+        target, hashmark, anchor = unquote(raw).partition('#')
+        found = find(target, old_source.parent, False) if target else None
+        if found is None or (found not in moved and old_source.resolve() == new_source.resolve()):
+            return m[0]
+        new = Path(os.path.relpath(moved.get(found, found), new_source.resolve().parent)).as_posix()
+        if not target.lower().endswith('.md') and new.lower().endswith('.md'):
+            new = new[:-3]
+        encoded = '<' + new + hashmark + anchor + '>' if m[2].startswith('<') else new.replace(' ', '%20').replace('(', '%28').replace(')', '%29') + hashmark + anchor
+        return m[0][:m.start(2) - m.start()] + encoded + m[0][m.end(2) - m.start():]
+
+    md_pattern = r'''(?<!!)\[([^\]\n]*)\]\((<[^>\n]+>|[^\s)]+)(?:[ \t]+(?:"[^"\n]*"|'[^'\n]*'|\([^\)\n]*\)))?[ \t]*\)'''
+    return outside_code(text, lambda s: re.sub(md_pattern, markdown, re.sub(r'(!?)\[\[([^\]\n]+)\]\]', wiki, s)))
+
+
+def migrate_command(args):
+    """Move notes by an explicit map, rewrite every link to them, keep before-copies and the path map."""
+    root = no_symlink_root(Path(args.root))
+    if not (root / CONFIG).is_file():
+        raise InputError('Initialize or adopt the selected workspace before migrating.')
+    p = profile_at(root)
+    vault = vault_base(root, p['vault_prefix'])
+    data = json.loads(Path(args.map).read_text(encoding='utf-8'))
+    moves = data.get('moves') if isinstance(data, dict) else None
+    if not isinstance(moves, dict) or not moves:
+        raise InputError('Map needs {"moves": {"old/relative/path.md": "new/relative/path.md"}}.')
+    moved, pairs = {}, []
+    for old, new in moves.items():
+        if not isinstance(new, str):
+            raise InputError('Destination must be a path string: ' + old)
+        src, dst = inside(root, old, 'Source'), inside(root, new, 'Destination')
+        if not src.is_file() or any(part.startswith('.') for part in Path(old).parts):
+            raise InputError('Source must be an existing visible file: ' + old)
+        if dst.exists() or dst.resolve() in moved.values():
+            raise InputError('Destination exists or is used twice: ' + new)
+        if dst.suffix.lower() != src.suffix.lower():
+            raise InputError('A move keeps the file extension: ' + old + ' → ' + new)
+        if src.suffix.lower() == '.pdf':
+            # Paper originals are copied or linked, never moved; a note's registered copy follows its note.
+            raise InputError('PDFs are not moved by migrate (other notes or tools may point at them): ' + old +
+                             '. Copy or link it to its paper note with pdfs attach instead.')
+        for part in Path(new).parts:
+            profiles.safe_name(part)
+        moved[src.resolve()] = dst.resolve()
+        pairs.append((src, dst))
+    # A registered original follows its paper note to the new field (rule-derived, not left to the agent).
+    register = pdfs.load_register(root)
+    for src, dst in list(pairs):
+        row = register['papers'].get(src.relative_to(root).as_posix()) if src.suffix.lower() == '.md' else None
+        for item in (row or {}).get('files', []):
+            if item.get('mode') == 'link':
+                continue  # a linked original stays exactly where the user keeps it
+            old_pdf = (root / item['path']).resolve()
+            new_pdf = (dst.parent.parent / 'PDFs' / (dst.stem + old_pdf.suffix)).resolve()
+            if old_pdf.is_file() and old_pdf not in moved and new_pdf != old_pdf:
+                if new_pdf.exists() or new_pdf in moved.values():
+                    raise InputError('The original PDF of a moved note would collide: ' + new_pdf.relative_to(root.resolve()).as_posix())
+                moved[old_pdf] = new_pdf
+                pairs.append((old_pdf, new_pdf))
+    occupied = {x.resolve() for x in regular_files(root)} - set(moved)
+    if any(x in occupied for x in moved.values()):
+        raise InputError('A destination collides with an existing file.')
+    before, rewritten = {}, {}
+    for path in markdown_files(vault):
+        text = raw_text(path)
+        new_text = rewrite_links(text, path, moved.get(path.resolve(), path.resolve()), vault, moved)
+        before[path.resolve()] = text
+        if new_text != text:
+            rewritten[path.resolve()] = new_text
+    # A paper renamed to another recognized prefix keeps its p2p_subfield metadata in step with the approved name.
+    renamed = []
+    for src, dst in moved.items():
+        text = rewritten.get(src, before.get(src))
+        if text is None or src.suffix.lower() != '.md' or role(text, src, root) != 'paper':
+            continue
+        prefix, sep, _ = dst.stem.partition(' - ')
+        old = scalar(split_front(text)[0], 'p2p_subfield')
+        if sep and old and old != prefix:
+            rewritten[src] = re.sub(r'^p2p_subfield:.*$', 'p2p_subfield: ' + json.dumps(prefix, ensure_ascii=False), text, count=1, flags=re.M)
+            renamed.append(dst.relative_to(root.resolve()).as_posix())
+    rows = [{'from': s.relative_to(root).as_posix(), 'to': d.relative_to(root).as_posix()} for s, d in pairs]
+    result = {'status': 'preview', 'moves': rows, 'subfield_metadata_updated': renamed,
+              'links_rewritten_in': sorted(x.relative_to(vault.resolve()).as_posix() for x in rewritten)}
+    pointers = [k for k, v in p['context'].items() if isinstance(v, str) and (vault / v).resolve() in moved]
+    if pointers:
+        result['profile_pointers_to_update'] = pointers
+    if not args.apply:
+        print(dump(result))
+        return 0
+    hashes = {x: digest(x.read_bytes()) for x in moved}
+    for path, text in before.items():
+        if raw_text(path) != text:
+            raise InputError('Changed while planning; nothing written. Run again: ' + str(path))
+    run = uuid.uuid4().hex[:12]
+    record = root / '.maintenance' / 'migrations' / run
+    for path in sorted(set(moved) | set(rewritten)):
+        copy = record / 'before' / path.relative_to(vault.resolve())
+        copy.parent.mkdir(parents=True, exist_ok=True)
+        copy.write_bytes(path.read_bytes())
+    (record / 'map.json').write_text(dump({'moves': {s.relative_to(vault.resolve()).as_posix(): d.relative_to(vault.resolve()).as_posix()
+                                                     for s, d in moved.items()}, 'source_sha256': {s.relative_to(vault.resolve()).as_posix(): h for s, h in hashes.items()},
+                                           'links_rewritten_in': result['links_rewritten_in']}) + '\n', encoding='utf-8')
+    write_texts({x: t for x, t in rewritten.items() if x not in moved}, before)
+    for src, dst in moved.items():
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        if src in rewritten:
+            with dst.open('x', encoding='utf-8', newline='') as out:
+                out.write(rewritten[src])
+            if raw_text(dst) != rewritten[src]:
+                raise InputError('Readback failed: ' + str(dst))
+            src.unlink()
+        else:
+            os.replace(src, dst)
+        folder = src.parent
+        while folder != root.resolve() and folder.is_relative_to(root.resolve()) and not any(folder.iterdir()):
+            folder.rmdir()
+            folder = folder.parent
+    BASENAMES.clear()
+    pdfs.migrate_register(root, moved)
+    result.update(status='migrated', record=str(record), navigation=apply_index(root, p, True))
+    print(dump(result))
+    return 0
+
+
+RULES = ('<!-- p2p:rules -->', '<!-- /p2p:rules -->')
+
+
+def rules_file():
+    """Workspace rules inside markers: upgrades refresh only the marked part, user text around it stays."""
+    return RULES[0] + '\n' + (PACKAGE/'assets/workspace-rules.md').read_text(encoding='utf-8').strip() + '\n' + RULES[1] + '\n'
+
+
+def upgrade_rules(text):
+    """Return (new_text, action) for an existing AGENTS.md."""
+    fresh = rules_file()
+    if RULES[0] in text and RULES[1] in text:
+        start, end = text.index(RULES[0]), text.index(RULES[1]) + len(RULES[1])
+        return text[:start] + fresh.rstrip('\n') + text[end:], 'refreshed'
+    normalized = hashlib.sha256(text.replace('\r\n', '\n').encode('utf-8')).hexdigest()
+    manifest = json.loads((PACKAGE/'MANIFEST.json').read_text(encoding='utf-8'))
+    if normalized in manifest['files'].get('assets/workspace-rules.md', []):
+        return fresh, 'replaced_shipped_copy'
+    return text.rstrip('\r\n') + '\n\n' + fresh, 'appended_kept_custom'
+
+
+def upgrade_command(args):
+    """Bring a workspace up to this skill version; never touches user content outside p2p markers."""
+    root = no_symlink_root(Path(args.root))
+    path = root / CONFIG
+    if not path.is_file():
+        raise InputError('Initialize or adopt the selected workspace before upgrading it.')
+    old_raw = path.read_bytes()
+    saved = json.loads(old_raw.decode('utf-8'))
+    p = profiles.normalize(saved)
+    result = {'status': 'preview', 'profile': 'unchanged', 'rules': 'unchanged'}
+    new_profile = dump(p) + '\n'
+    if json.loads(new_profile) != saved:
+        result['profile'] = 'normalized (new defaults added; your keys and extension settings kept)'
+    agents = root / 'AGENTS.md'
+    old_rules = raw_text(agents) if agents.is_file() else None
+    new_rules, action = upgrade_rules(old_rules) if old_rules is not None else (rules_file(), 'created')
+    if new_rules != old_rules:
+        result['rules'] = action
+    if args.apply:
+        if result['profile'] != 'unchanged':
+            result['profile_backup'] = profiles.save_update(path, p, digest(old_raw))['backup']
+        if result['rules'] != 'unchanged':
+            write_texts({agents: new_rules}, {agents: old_rules})
+        result.update(status='upgraded', views=apply_views(root, profile_at(root), True),
+                      navigation=apply_index(root, profile_at(root), True))
+    print(dump(result))
+    return 0
+
+
+def pdfs_command(args):
+    root = no_symlink_root(Path(args.root))
+    core = sys.modules[__name__]
+    if args.action == 'text':
+        if not args.file:
+            raise InputError('pdfs text needs --file.')
+        pages = [int(x) for x in args.pages.split(',')] if args.pages else None
+        print(dump(pdfs.text_command(core, root, args.file, args.engine, pages)))
+        return 0
+    if not (root / CONFIG).is_file():
+        raise InputError('Initialize or adopt the selected workspace first.')
+    if args.action == 'scan':
+        if not args.source:
+            raise InputError('pdfs scan needs --from <folder>.')
+        print(dump(pdfs.scan(core, root, args.source)))
+        return 0
+    plan = json.loads(Path(args.plan).read_text(encoding='utf-8')) if args.plan else {}
+    items = plan.get('attach') if isinstance(plan, dict) else None
+    if not isinstance(items, list) or not items or not all(isinstance(x, dict) and x.get('pdf') and x.get('note') for x in items):
+        raise InputError('pdfs attach needs --plan with {"attach": [{"pdf": file, "note": "Library/.../Papers/Note.md", "mode": "copy" or "link"}]}.')
+    result = pdfs.attach(core, root, profile_at(root), [(x['pdf'], x['note'], x.get('mode')) for x in items], args.apply)
+    if args.apply:
+        result['navigation'] = apply_index(root, profile_at(root), True)
+    print(dump(result))
+    return 0
+
+
+def relate_command(args):
+    root = no_symlink_root(Path(args.root))
+    if not (root / CONFIG).is_file():
+        raise InputError('Initialize or adopt the selected workspace first.')
+    plan = json.loads(Path(args.plan).read_text(encoding='utf-8'))
+    items = plan.get('relations') if isinstance(plan, dict) else None
+    if not isinstance(items, list) or not items or not all(isinstance(x, dict) for x in items):
+        raise InputError('relate needs --plan with {"relations": [{"id", "a", "b", "kind", "papers", "text"}]}.')
+    print(dump(relations.relate(sys.modules[__name__], root, profile_at(root), items, args.apply)))
+    return 0
+
+
+def state_command(args):
+    root = no_symlink_root(Path(args.root))
+    if not (root / CONFIG).is_file():
+        raise InputError('Initialize or adopt the selected workspace first.')
+    core, p = sys.modules[__name__], profile_at(root)
+    if args.command == 'brief':
+        print(dump(state.brief(core, root, p)))
+    elif args.command == 'snapshot':
+        print(dump(state.snapshot(core, root, p, args.out)))
+    else:
+        print(dump(state.diff(core, root, p, args.baseline)))
+    return 0
+
+
+def obsidian_vaults(root):
+    return [x for x in [root, *root.parents] if (x / '.obsidian').is_dir()]
+
+
+def with_vault_prefix(root, p, supplied, vault):
+    """Derive vault_prefix from where the Obsidian vault actually is, never from a guess."""
+    if vault:
+        base = no_symlink_root(Path(vault))
+        if root != base and not root.is_relative_to(base):
+            raise InputError('--vault must be the academic root or one of its parent folders.')
+        prefix = root.relative_to(base).as_posix() if root != base else ''
+        if 'vault_prefix' in supplied and supplied['vault_prefix'].strip('/') != prefix:
+            raise InputError('Profile vault_prefix differs from --vault: ' + supplied['vault_prefix'] + ' / ' + prefix)
+    elif 'vault_prefix' in supplied:
+        prefix = p['vault_prefix']
+    else:
+        found = obsidian_vaults(root)
+        if len(found) > 1:
+            raise InputError('Several Obsidian vaults contain this folder: ' + ', '.join(str(x) for x in found) +
+                             '. Pass --vault with the one you open in Obsidian.')
+        prefix = root.relative_to(found[0]).as_posix() if found and found[0] != root else ''
+    p = profiles.normalize({**p, 'vault_prefix': prefix})
+    vault_base(root, p['vault_prefix'])
+    return p
+
+
 def init_workspace(args):
     root = no_symlink_root(Path(args.root))
     p = load_profile(args.profile)
     supplied = json.loads(Path(args.profile).read_text(encoding='utf-8')) if args.profile else {}
+    if not profiles.inert_extensions(supplied):
+        raise InputError('Onboarding never switches extensions on; configure them later in the workspace profile.')
     if (root/CONFIG).exists():
         print(dump({'status':'already_initialized','root':str(root),'written':[]}));return 0
+    if args.adopt:
+        return adopt_workspace(args,root,p)
     if root.exists() and (not root.is_dir() or any(root.iterdir())):
-        raise InputError('Target is nonempty. Use agent-guided adoption; init never migrates or overwrites.')
+        raise InputError('Target is nonempty. Use init --adopt for an existing workspace; init never migrates or overwrites.')
     if not args.non_interactive:
         if not sys.stdin.isatty():
             raise InputError('No terminal. Supply --profile ... --non-interactive, or invoke the skill for onboarding.')
@@ -241,23 +940,45 @@ def init_workspace(args):
         if not any(k in supplied for k in ('language','note_languages')):
             p['note_languages']=[x.strip() for x in ask('Note language tags in order (comma separated)',','.join(p['note_languages'])).split(',')]
             p.pop('language',None)
-        if 'vault_prefix' not in supplied:p['vault_prefix']=ask('Vault-relative academic prefix (empty for vault root)',p['vault_prefix'])
         p=profiles.normalize(p)
-    vault_base(root,p['vault_prefix'])
+    p=with_vault_prefix(root,p,supplied,args.vault)
     for origin in p['preference_sources'].values():origin['scope']='workspace'
-    planned=i18n.scaffold(p,query)
+    planned=i18n.scaffold(p)
     # Agent rules reference the live profile; changing language/color preferences
     # does not leave duplicated literal rules stale.
-    planned['AGENTS.md']=(PACKAGE/'assets/workspace-rules.md').read_text(encoding='utf-8')
+    planned['AGENTS.md']=rules_file()
     planned[CONFIG]=dump(p)+'\n'
     if not args.apply:
-        print(dump({'status':'design_only','root':str(root),'profile':p,'planned_files':list(planned),'next':'Add --apply to create this fresh workspace.'}));return 0
+        print(dump({'status':'design_only','root':str(root),'profile':p,'planned_files':list(planned),'planned_views':None if args.no_views else {t:query(p['vault_prefix'],f) for t,f in VIEWS},'next':'Add --apply to create this fresh workspace and its Obsidian views.'}));return 0
     if root.exists() and any(root.iterdir()):raise InputError('Target changed during onboarding; no files written.')
     root.mkdir(parents=True,exist_ok=True)
     for relative,content in planned.items():
         dest=root/relative;dest.parent.mkdir(parents=True,exist_ok=True)
         with dest.open('x',encoding='utf-8',newline='') as out:out.write(content)
-    print(dump({'status':'created','root':str(root),'written':list(planned)}));return 0
+    result={'status':'created','root':str(root),'written':list(planned)}
+    if not args.no_views:result['views']=apply_views(root,p,True)
+    print(dump(result));return 0
+
+
+def adopt_workspace(args,root,p):
+    """Register an existing workspace: add only the profile (and rules if absent), then views."""
+    if not root.is_dir():raise InputError('Adoption needs an existing workspace folder.')
+    supplied=json.loads(Path(args.profile).read_text(encoding='utf-8')) if args.profile else {}
+    p=with_vault_prefix(root,p,supplied,args.vault)
+    for origin in p['preference_sources'].values():origin['scope']='workspace'
+    planned={CONFIG:dump(p)+'\n'}
+    if not (root/'AGENTS.md').exists():planned['AGENTS.md']=rules_file()
+    files=markdown_files(root);untagged=[x for x in files if role(x.read_text(encoding='utf-8'),x,root) is None and x.name!='AGENTS.md']
+    result={'status':'adoption_design','root':str(root),'planned_files':list(planned),'existing_notes':len(files),
+            'notes_without_graph_role':len(untagged),'sample_untagged':[x.relative_to(root).as_posix() for x in untagged[:20]],
+            'planned_views':None if args.no_views else {t:query(p['vault_prefix'],f) for t,f in VIEWS},
+            'next':'Add --apply to register the workspace and create its Obsidian views. Existing notes are not changed; propose role tags, field indexes and supported links next (see onboarding).'}
+    if not args.apply:print(dump(result));return 0
+    for relative,content in planned.items():
+        with (root/relative).open('x',encoding='utf-8',newline='') as out:out.write(content)
+    result.update(status='adopted',written=list(planned))
+    if not args.no_views:result['views']=apply_views(root,p,True)
+    print(dump(result));return 0
 
 
 def validate_profile_values(p):
@@ -330,8 +1051,10 @@ def check_workspace(args):
     registered={(x['discipline'],x['field'],x['direction']) for x in p['taxonomy']}
     library=layout_values(p,'library');projects=layout_values(p,'projects')
     papers=layout_values(p,'papers');concepts=layout_values(p,'concepts');groups=group_values(p)
+    kinds,edges={},[]
     for path in files:
         text=path.read_text(encoding='utf-8');front,body=split_front(text);parts=path.relative_to(root).parts;rel=path.relative_to(root).as_posix();kind=role(text,path,root)
+        kinds[path.resolve()]=kind
         note_id=scalar(front,'p2p_id')
         if note_id:
             if note_id in ids:errors.append('Duplicate p2p_id: '+rel+' / '+ids[note_id])
@@ -401,7 +1124,13 @@ def check_workspace(args):
                 target=resolve_link(link,path,vault)
                 if not target.exists():errors.append('Missing link: '+rel+' → '+link['target'])
                 elif not anchor_exists(target,link['anchor']):errors.append('Missing anchor: '+rel+' → '+link['target']+'#'+link['anchor'])
+                else:edges.append((path.resolve(),target.resolve()))
             except InputError as exc:errors.append(rel+': '+str(exc))
+    extra,tally=graph_warnings(root,p,files,kinds,edges,counts);warnings+=extra
+    pdf_errors,pdf_warnings,pdf_counts=pdfs.audit(sys.modules[__name__],root,p,files,{f:k for f,k in ((x,kinds.get(x.resolve())) for x in files)});errors+=pdf_errors;warnings+=pdf_warnings
+    rel_errors,rel_warnings,rel_counts=relations.audit(sys.modules[__name__],root,p,kinds,edges);errors+=rel_errors;warnings+=rel_warnings
+    navigation=navigation_status(root,p,tally,warnings)
+    if SHORT_LINKS.get(vault.resolve()):warnings.append(str(SHORT_LINKS[vault.resolve()])+' wikilinks resolve by file name only; full vault-relative paths survive moves (migrate rewrites them).')
     for path in files:
         parts=path.relative_to(root).parts
         if parts[0] not in projects or len(parts)<6:continue
@@ -411,9 +1140,84 @@ def check_workspace(args):
     for name in projects:
         for raw in regular_files(root/name):
             if raw.suffix.lower()=='.pdf':warnings.append('PDF in Projects needs provenance review; source papers stay in Library/original archive, own result artifacts need evidence: '+str(raw.relative_to(root)))
-    report={'status':'failed' if errors else ('needs_review' if warnings else 'passed'),'structural_status':'failed' if errors else 'passed','files':len(files),'roles':counts,'errors':sorted(set(errors)),'warnings':sorted(set(warnings)),
+    report={'status':'failed' if errors else ('needs_review' if warnings else 'passed'),'structural_status':'failed' if errors else 'passed','navigation':navigation,'pdfs':pdf_counts,'relations':rel_counts,'files':len(files),'roles':counts,'errors':sorted(set(errors)),'warnings':sorted(set(warnings)),
             'scope':'Structure, naming, locale-aware section/metadata presence, IDs/source duplicates, links/anchors and declared language shape. Not translation quality, source support or scientific verification.'}
     print(dump(report));return 1 if errors else 0
+
+
+SCAFFOLD_FILES = {'AGENTS.md'}
+
+
+def exempt_paths(root, p):
+    """Profile-declared management/task pointers may live inside the root."""
+    vault = vault_base(root, p['vault_prefix'])
+    return [(vault / v).resolve() for k, v in p['context'].items()
+            if k in ('management_entry', 'maintenance_entry', 'task_template', 'maintenance_directory') and v]
+
+
+def graph_warnings(root, p, files, kinds, edges, counts):
+    """Warnings for the fixed structure and for what the native graph views will show."""
+    warnings, tally = [], dict.fromkeys(('untagged', 'unconnected', 'missing_field_indexes', 'outside_structure'), 0)
+    if not (root/CONFIG).is_file():
+        warnings.append('Workspace is not initialized or adopted (no '+CONFIG+'); checks used package defaults. Run init (empty folder) or init --adopt (existing notes).')
+    library, projects = layout_values(p, 'library'), layout_values(p, 'projects')
+    homes = {x['home'] + '.md' for x in [p['layout'], *p.get('previous_layouts', [])]} | SCAFFOLD_FILES
+    exempt = exempt_paths(root, p)
+    content = 0
+    for path in files:
+        rel, resolved = path.relative_to(root), path.resolve()
+        parts, kind = rel.parts, kinds.get(resolved)
+        if any(resolved == x or resolved.is_relative_to(x) for x in exempt) or (len(parts) == 1 and parts[0] in homes):
+            continue
+        if not (len(parts) > 1 and parts[0] in library | projects and path.stem == path.parent.name and len(parts) <= 3):
+            content += 1  # Library/Projects and discipline indexes are navigation scaffolding
+        if parts[0] not in library | projects or len(parts) == 1:
+            tally['outside_structure'] += 1
+            warnings.append('Outside the Paper2Project structure (move it under Library/Projects with migrate, or keep it outside the academic root): '+rel.as_posix())
+        elif not kind and path.stem != path.parent.name:
+            tally['untagged'] += 1
+            warnings.append('Untagged note inside the structure (assign its role with tag, or move it): '+rel.as_posix())
+    if content and not counts:
+        warnings.append(str(content)+' Markdown notes but no graph-role tags (#paper, #concept, #research-field, #research-direction, #research-project); Research Map and Full Network will be empty.')
+    nodes = {x for x, k in kinds.items() if k in TAGS}
+    linked = set()
+    for source, target in edges:
+        if source != target and source in nodes and target in nodes:
+            linked.update((source, target))
+    folders = layout_values(p, 'papers') | layout_values(p, 'concepts')
+    for path in files:
+        kind = kinds.get(path.resolve())
+        if kind not in ('paper', 'concept'):
+            continue
+        rel = path.relative_to(root)
+        if path.resolve() not in linked:
+            tally['unconnected'] += 1
+            warnings.append('Unconnected '+kind+' in Full Network (no links to or from another role note; run index --apply, then link supported concepts): '+rel.as_posix())
+        parts = rel.parts
+        if len(parts) == 5 and parts[0] in library and parts[3] in folders:
+            index = root.joinpath(*parts[:3], parts[2]+'.md')
+            if kinds.get(index.resolve()) != 'field':
+                tally['missing_field_indexes'] += 1
+                warnings.append('Field index missing or untagged (#research-field; index --apply creates it): '+index.relative_to(root).as_posix())
+    return warnings, tally
+
+
+def navigation_status(root, p, tally, warnings):
+    """One deterministic answer to 'is the workspace navigable yet?'."""
+    views = 'missing'
+    if (root/CONFIG).is_file():
+        try:
+            actions = plan_views(root, p, 0)[3]
+            graph = [x for x in actions if x['view'] in dict(VIEWS)]
+            views = 'present' if all(x['action'] in ('unchanged', 'kept_existing') for x in graph) else 'missing'
+        except (InputError, ValueError) as exc:
+            views = 'unreadable'
+            warnings.append('Obsidian bookmarks could not be read: ' + str(exc))
+        if views == 'missing':
+            warnings.append('Research Map / Full Network bookmarks are missing or outdated; run views --apply.')
+    status = {'initialized': (root/CONFIG).is_file(), 'views': views, **tally}
+    status['status'] = 'complete' if status['initialized'] and views == 'present' and not any(tally.values()) else 'incomplete'
+    return status
 
 
 def sections(text):
@@ -522,24 +1326,73 @@ def render_command(args):
     for code in profile['note_languages']:
         # A durable note needs a durable custom pack, even for task-only language.
         i18n.locale(code,saved)
-    card=json.loads(Path(args.input).read_text(encoding='utf-8'));text=i18n.render(args.kind,card,profile)
-    dest=Path(args.output)
+    card=json.loads(Path(args.input).read_text(encoding='utf-8'))
+    dest=Path(args.output) if args.output else derived_path(args.kind,card,saved)
     if not dest.is_absolute():dest=root/dest
     no_symlink_root(dest.parent)
     if not dest.resolve().is_relative_to(root.resolve()) or dest.suffix.lower()!='.md':raise InputError('Note destination must be a Markdown file inside the selected root.')
-    if dest.exists() or dest.is_symlink():raise InputError('Note exists; render never replaces a canonical note.')
+    replacing=None
+    if dest.exists() or dest.is_symlink():
+        old=dest.read_text(encoding='utf-8') if dest.is_file() and not dest.is_symlink() else ''
+        # Only a program-generated field index may be replaced by the real field note; it keeps its ID.
+        if not (args.kind=='field' and scalar(split_front(old)[0],'p2p_generated')=='true' and role(old,dest,root)=='field'):
+            raise InputError('Note exists; render never replaces a canonical note.')
+        replacing=old;card['id']=scalar(split_front(old)[0],'p2p_id') or card.get('id')
+    if not card.get('id'):card['id']=str(uuid.uuid4())
+    pdf=card.get('pdf')
+    if card.get('pdf_mode') not in (None,'copy','link'):raise InputError('"pdf_mode" is "copy" (default) or "link".')
+    if pdf is not None and (args.kind!='paper' or not isinstance(pdf,str) or not pdfs.inspect_pdf(Path(pdf).expanduser().read_bytes()).get('is_pdf')):
+        raise InputError('"pdf" must name an existing PDF file, for paper cards only.')
+    text=i18n.render(args.kind,card,profile)
+    if card.get('evidence') is not None:
+        if args.kind not in ('project','project-record') or not isinstance(card['evidence'],list) or not card['evidence']:
+            raise InputError('"evidence" is a non-empty list for project and project-record cards.')
+        lines=results.evidence_lines(card['evidence'],{})
+        colon=lambda lang:'：' if lang.startswith('zh') else ':'
+        text=put_managed(text,[['**'+i18n.locale(lang,profile)['labels']['sources']+colon(lang)+'**',*lines] for lang in profile['note_languages']],EVIDENCE)
     identity=source_identity(text) if args.kind=='paper' else None
     for path in markdown_files(root):
+        if replacing is not None and path.resolve()==dest.resolve():continue
         old=path.read_text(encoding='utf-8');front,_=split_front(old)
         if scalar(front,'p2p_id')==card['id']:raise InputError('Stable note ID already exists: '+str(path.relative_to(root)))
         if identity and role(old,path,root)=='paper' and source_identity(old)==identity:raise InputError('Paper source already has a canonical note: '+str(path.relative_to(root)))
-    result={'status':'preview','path':str(dest),'languages':profile['note_languages'],'markdown':text}
+    result={'status':'preview','path':str(dest),'id':card['id'],'languages':profile['note_languages'],'markdown':text}
     if args.apply:
         dest.parent.mkdir(parents=True,exist_ok=True)
-        with dest.open('x',encoding='utf-8',newline='') as out:out.write(text)
+        if replacing is None:
+            with dest.open('x',encoding='utf-8',newline='') as out:out.write(text)
+        else:write_texts({dest:text},{dest:replacing})
         if dest.read_text(encoding='utf-8')!=text:raise InputError('Note readback failed.')
-        result={'status':'rendered','path':str(dest),'languages':profile['note_languages'],'content_sha256':digest(text.encode('utf-8'))}
+        result={'status':'rendered','path':str(dest),'id':card['id'],'languages':profile['note_languages'],'content_sha256':digest(text.encode('utf-8'))}
+        # Path-derived navigation (field/direction/Library indexes) is written by the program, not the agent.
+        if pdf:result['original']=pdfs.attach(sys.modules[__name__],root,saved,[(pdf,dest.relative_to(root).as_posix(),card.get('pdf_mode'))],True)
+        result['navigation']=apply_index(root,saved,True)
     print(dump(result));return 0
+
+
+def derived_path(kind,card,p):
+    """Canonical location from the card's classification; the structure is fixed, names are the user's."""
+    layout=p['layout']
+    def name(key,fallback=None):
+        value=card.get(key) or (card.get(fallback) if fallback else None)
+        if not isinstance(value,str):raise InputError('Supply "'+key+'" in the card (or --output) to place this '+kind+'.')
+        try:profiles.safe_name(value)
+        except ValueError as exc:raise InputError(str(exc)+' (card key "'+key+'")')
+        return value
+    discipline,field=name('discipline'),name('field')
+    library,projects=Path(layout['library'],discipline,field),Path(layout['projects'],discipline,field)
+    if kind=='paper':
+        if p['preferences']['filename_style'] not in (None,'subfield-title'):raise InputError('Custom filename_style: pass --output.')
+        return library/layout['papers']/(name('subfield')+' - '+name('short_title','title')+'.md')
+    if kind=='concept':return library/layout['concepts']/(name('short_title','title')+'.md')
+    if kind=='field':return library/(field+'.md')
+    direction=name('direction','title' if kind=='direction' else None)
+    if kind=='direction':return projects/direction/(direction+'.md')
+    if kind=='project':
+        title=name('short_title','title');return projects/direction/title/(title+'.md')
+    group=card.get('group')
+    if group not in layout['groups']:raise InputError('project-record cards need "group": problem, methods, results or extensions.')
+    return projects/direction/name('project')/layout['groups'][group]/(name('short_title','title')+'.md')
 
 
 def locales_command(args):
@@ -652,6 +1505,9 @@ def main(argv=None):
             cmd.add_argument('--profile', help='Selected JSON preferences; unspecified values use defaults.')
             cmd.add_argument('--non-interactive', action='store_true')
             cmd.add_argument('--apply', action='store_true', help='Create only within a fresh empty target.')
+            cmd.add_argument('--adopt', action='store_true', help='Register an existing workspace; adds only the profile and missing rules.')
+            cmd.add_argument('--no-views', action='store_true', help='Skip the Obsidian Research Map/Full Network bookmarks.')
+            cmd.add_argument('--vault', help='Obsidian vault folder containing the root; detected when only one encloses it.')
         if name == 'export':
             cmd.add_argument('--kind', action='append', choices=KINDS, help='Repeat to restrict the snapshot; default all managed kinds.')
             cmd.add_argument('--output', required=True, help='New local .jsonl path, or - for stdout.')
@@ -661,18 +1517,43 @@ def main(argv=None):
     cmd.add_argument('--apply',action='store_true');cmd.add_argument('--expect-sha');cmd.add_argument('--output')
     cmd=sub.add_parser('render',help='Render supplied source-grounded content with localized templates.')
     cmd.add_argument('--root',required=True);cmd.add_argument('--kind',choices=tuple(i18n.SPECS),required=True)
-    cmd.add_argument('--input',required=True);cmd.add_argument('--output',required=True);cmd.add_argument('--profile');cmd.add_argument('--apply',action='store_true')
+    cmd.add_argument('--input',required=True);cmd.add_argument('--output',help='Optional; derived from the card classification when omitted.');cmd.add_argument('--profile');cmd.add_argument('--apply',action='store_true')
     cmd=sub.add_parser('discover',help='Inventory sources or stage a discovery review packet.')
     cmd.add_argument('--root',required=True);cmd.add_argument('--input',required=True)
     cmd.add_argument('--prior',action='append',default=[]);cmd.add_argument('--stage',metavar='PACKET')
     cmd=sub.add_parser('review-discovery',help='Validate separate choices for material and connections.')
     cmd.add_argument('--root',required=True);cmd.add_argument('--packet',required=True);cmd.add_argument('--decisions',required=True)
+    cmd=sub.add_parser('pdfs',help='Original PDFs: scan a folder, extract text, attach approved copies to paper notes.')
+    cmd.add_argument('action',choices=('scan','text','attach'));cmd.add_argument('--root',required=True)
+    cmd.add_argument('--from',dest='source',help='scan: folder of PDFs');cmd.add_argument('--file',help='text: one PDF')
+    cmd.add_argument('--engine',choices=('auto','pymupdf','pdftotext','builtin'),default='auto');cmd.add_argument('--pages',help='text: e.g. 1,2,5')
+    cmd.add_argument('--plan',help='attach: {"attach": [{"pdf": file, "note": root-relative paper note, "mode": "copy"|"link"}]}');cmd.add_argument('--apply',action='store_true')
+    cmd=sub.add_parser('relate',help='Preview or write registered research/concept connections from a {"relations": [...]} plan.')
+    cmd.add_argument('--root',required=True);cmd.add_argument('--plan',required=True);cmd.add_argument('--apply',action='store_true')
+    cmd=sub.add_parser('repo',help='Read-only inventory of a results repository: commit, remote, documents, results, figures.')
+    cmd.add_argument('action',choices=('scan',));cmd.add_argument('--path',required=True)
+    for name,text in (('brief','Read-only: rules and pointers with hashes, navigation, originals, relations, retrieval, next commands.'),
+                      ('snapshot','Store exact copies of notes, rules, registers and the link inventory before an edit.'),
+                      ('diff','Compare the workspace with a snapshot: files, links, roles, views and registers.')):
+        cmd=sub.add_parser(name,help=text);cmd.add_argument('--root',required=True)
+        if name=='snapshot':cmd.add_argument('--out',required=True)
+        if name=='diff':cmd.add_argument('--baseline',required=True)
+    cmd=sub.add_parser('upgrade',help='Preview or bring a workspace up to this skill version (profile defaults, marked rules, views, indexes).')
+    cmd.add_argument('--root',required=True);cmd.add_argument('--apply',action='store_true')
+    cmd=sub.add_parser('views',help='Preview or merge the Research Map/Full Network graph bookmarks into the Obsidian vault.')
+    cmd.add_argument('--root',required=True);cmd.add_argument('--apply',action='store_true')
+    cmd=sub.add_parser('index',help='Preview or write the path-derived field/direction/Library/Projects link lists.')
+    cmd.add_argument('--root',required=True);cmd.add_argument('--apply',action='store_true')
+    cmd=sub.add_parser('tag',help='Preview or append approved graph-role tags from a {"roles": {path: role}} plan.')
+    cmd.add_argument('--root',required=True);cmd.add_argument('--plan',required=True);cmd.add_argument('--apply',action='store_true')
+    cmd=sub.add_parser('migrate',help='Preview or move notes by a {"moves": {old: new}} map, rewriting links vault-wide.')
+    cmd.add_argument('--root',required=True);cmd.add_argument('--map',required=True);cmd.add_argument('--apply',action='store_true')
     cmd=sub.add_parser('locales');cmd.add_argument('--template')
     args = parser.parse_args(argv)
     try:
         return {'inspect': inspect_workspace, 'init': init_workspace,
                 'check': check_workspace, 'export': export_workspace,
-                'preferences':preferences_command,'render':render_command,'locales':locales_command,
+                'preferences':preferences_command,'render':render_command,'locales':locales_command,'views':views_command,'index':index_command,'tag':tag_command,'migrate':migrate_command,'upgrade':upgrade_command,'pdfs':pdfs_command,'relate':relate_command,'repo':lambda a:print(dump(results.scan(a.path))) or 0,'brief':state_command,'snapshot':state_command,'diff':state_command,
                 'discover':discovery_command,'review-discovery':discovery_command}[args.command](args)
     except (ValueError, OSError, TypeError, KeyError, UnicodeError) as ex:
         print(dump({'status': 'error', 'message': str(ex)}), file=sys.stderr)

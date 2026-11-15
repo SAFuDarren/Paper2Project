@@ -1,6 +1,6 @@
 # Preferences, one entry and reliable handoff
 
-Use for adopting an existing workspace or improving how another agent finds its rules and maintenance state. These changes improve execution without changing the user's research/management requirements. `init` does not perform this migration and does not install global hooks.
+Use for adopting an existing workspace or improving how another agent finds its rules and maintenance state. These changes improve execution without changing the user's research/management requirements. `init --adopt` registers the workspace and its graph views without moving notes (see [onboarding.md](onboarding.md)); it performs no migration and installs no global hooks.
 
 ## Preserve before adapting
 
@@ -75,6 +75,10 @@ Paths above are examples, not a required local tree. Management/task/template/ma
 - Preserve task ID, owner/reviewer, actual completion state, source/evidence, dates, checkpoint and history. Unknown stays unknown. Formatting does not grant a new pass, approval or permission.
 - Back up the active record and update that same record. Do not batch-rewrite frozen history or replace an external project system with a new tracker.
 - A template and an owner field are conventions, not runtime locks. Coordinate writers and reread before writing; do not promise enforced routing or concurrency protection unless implemented and tested.
+
+## Context, before-copies and review
+
+`brief` is the first read of a session: rule and pointer files with hashes, profile choices, the `navigation` block, originals, recorded connections, retrieval freshness and the next commands. Before an authorized content edit, `snapshot --out .maintenance/snapshots/<run>` stores exact copies and the link inventory; afterwards `diff --baseline` lists changed files, added/removed links, role changes and changed registers or views, so meaning and links are reviewed rather than counts.
 
 ## Acceptance: prove handoff with a small rehearsal
 

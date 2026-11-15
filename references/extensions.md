@@ -9,7 +9,7 @@ No claims are made about a specific external repository's current API, interoper
 Markdown notes remain the source of truth. External stores and indexes are derived and rebuildable. Users choose which note kinds to expose; project records need not leave the machine just because papers are indexed.
 
 ```sh
-python3 scripts/p2p.py export --root /chosen/Academic --kind paper --kind concept --output /chosen/retrieval-input.jsonl
+python scripts/p2p.py export --root /chosen/Academic --kind paper --kind concept --output /chosen/retrieval-input.jsonl
 ```
 
 The command is explicit, local and one-shot. It writes a fresh selected snapshot, never watches a folder or starts a daemon. Existing output files are refused. Symlinked documents/directories are skipped. Export never mutates canonical notes or reads original PDFs, hidden app settings or credentials.
@@ -61,7 +61,7 @@ A future provider accepts a query, selected snapshot/scope and a result limit. I
 | `agent` | Host agent and allowed tools | Read/search by default; propose note changes separately; follow current user authority before applying writes, external calls or publication |
 | `knowledge_store` | gbrain or another chosen repository/tool | Map public IDs/paths and snapshot/retrieval records; validate the selected tool's real interface; preserve its own authority rules; no direct database edits or sync defaults |
 
-The CLI rejects enabled/non-null slots in its own profile until a real implementation is supplied. Setting a configuration name cannot activate nonexistent functionality. A separate future adapter may maintain its own configuration without requiring the core to depend on it.
+A user or their adapter may enable a slot, name a provider and add its own settings (and add further slots such as `database`). The core keeps that configuration verbatim through every command and update, never activates it, and refuses only credential-like keys (store a reference such as `api_key_env`). Onboarding and preference signals cannot switch a slot on. Adapter code lives in the skill's `local/` folder or the user's own repository, which updates never touch; see [updates.md](updates.md).
 
 ## Change proposals for agent/store integrations
 

@@ -28,9 +28,24 @@ First use, after the LLM has prepared a small concrete design and selected root:
 ```sh
 python scripts/p2p.py preferences --root /chosen/Academic --signals /chosen/signals.json --output /chosen/profile.json --apply
 python scripts/p2p.py init --root /chosen/Academic --profile /chosen/profile.json --non-interactive --apply
+# add --vault /chosen/Vault when several Obsidian vaults enclose the root
 ```
 
-The initializer only accepts an empty root. It creates localized home/index text, the profile and short agent rules. It does not invent disciplines/projects/results, migrate old files, translate scope/aim text or save native app settings. Scope/aim are shown literally as supplied until the LLM writes the corresponding explanation from real context.
+The initializer only accepts an empty root. It creates localized home/index text, the profile and short agent rules, then adds the Research Map and Full Network graph bookmarks plus a reading-entry bookmark to the vault's Obsidian bookmarks (see [links-and-graphs.md](links-and-graphs.md); `--no-views` skips this). It does not invent disciplines/projects/results, migrate old files or translate scope/aim text. Scope/aim are shown literally as supplied until the LLM writes the corresponding explanation from real context.
+
+`render --apply` places each note at the path derived from its card, adds a UUID when the card has none, and runs `index`, which links the paper from its field index (creating a missing one) and the field from the Library index. The agent adds only the concept links its sources support.
+
+When the user hands over PDFs and/or a results repository, continue with [pdfs-and-results.md](pdfs-and-results.md) right after `init`.
+
+## Existing workspace: adopt, then connect
+
+When the chosen root already has notes, do not stop at a map or summary. Each step below is one command; the agent supplies the judgments as JSON and the program writes the files.
+
+1. **Register.** `init --adopt`, then `init --adopt --apply`. The user may pick any folder as the academic root; the vault prefix comes from the enclosing `.obsidian` (pass `--vault` when several enclose it). Only the profile and a missing `AGENTS.md` are written, then the graph bookmarks. The result lists notes without a graph role.
+2. **Place.** Propose, per note, its canonical destination under `Library/<Discipline>/<Field>/<Papers|Concepts>/` or `Projects/...`, using recognized classification names. After the user approves, run `migrate --map moves.json` (preview), then `--apply`. It moves the files, rewrites every wiki/Markdown/embed link to them (including short `[[Name]]` links) across the vault, keeps before-copies and the map under `.maintenance/migrations/`, and removes emptied folders. Notes that should stay outside the academic structure are moved out of the root, not kept as exceptions; management/task pointers declared in the profile are the only allowed extras.
+3. **Tag.** Propose a role per note (`paper`, `concept`, `field`, `direction`, `project`). A user's own chapters, headings or project parts are never `field`. After approval, run `tag --plan roles.json --apply`; it appends tag lines only and refuses conflicting roles.
+4. **Connect.** `index --apply` (also run by `migrate`, `tag` and `render`) writes every path-derived link. Add concept links only from source-supported definitions/uses. A paper without a reading note stays a plain-text pending item, not an empty node.
+5. **Verify.** Run `check` and report its `navigation` block. Repeat steps 2–4 for each open count until it is `complete`, or report what is left and why. Mention that the bookmarks load when the vault is reopened if Obsidian was running.
 
 Later, resolve a task-only change with no writes:
 
@@ -53,4 +68,4 @@ python scripts/p2p.py preferences --root /chosen/Academic --signals /chosen/sign
 
 Have the LLM supply the content card described in [workflow.md](workflow.md). `render` fills all six templates using the selected labels/order. Every requested language needs supplied prose. The program does not translate, hallucinate reading or infer a contribution. New notes retain their own language metadata so later defaults do not relabel old content.
 
-For an existing workspace, preserve its content, names and rule bodies. Adopt a tailored profile without moving anything when sufficient. For entry/task/maintenance paths use [preferences-and-handoff.md](preferences-and-handoff.md). Stop after a concrete usable entry and first real reading path; setup success is not a research assessment.
+For an existing workspace, preserve its content, names and rule bodies, and follow the adoption steps above. For entry/task/maintenance paths use [preferences-and-handoff.md](preferences-and-handoff.md). Stop after a concrete usable entry, working graph views and a first real reading path; setup success is not a research assessment.

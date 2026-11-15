@@ -6,6 +6,7 @@ import re
 import sys
 import i18n
 import profiles
+import update_skill
 
 ROOT=Path(__file__).resolve().parents[1]
 def main():
@@ -33,8 +34,31 @@ def main():
     for kind in i18n.SPECS:
         text=(ROOT/'assets/templates'/(kind+'.md')).read_text(encoding='utf-8')
         if any('{{'+key+'}}' not in text for key in ('TITLE','METADATA','SECTIONS')):errors.append('Incomplete template: '+kind)
+    # Every shipped file must be in the release manifest so updates can tell it from a local edit.
+    manifest=build_manifest()
+    if '--write-manifest' in sys.argv[1:]:
+        (ROOT/update_skill.MANIFEST).write_text(json.dumps(manifest,indent=1,sort_keys=True)+'\n',encoding='utf-8')
+    elif '--release' in sys.argv[1:]:
+        shipped=ROOT/update_skill.MANIFEST
+        if not shipped.is_file() or json.loads(shipped.read_text(encoding='utf-8'))!=manifest:
+            errors.append('MANIFEST.json is out of date; run python scripts/package_check.py --write-manifest')
     # Privacy checks are packaging guards, not a secret-scanner certification.
     print(json.dumps({'status':'failed' if errors else 'passed','errors':errors,'core_lines':len(core.splitlines()),'locale_packs':list(packs),'templates':len(i18n.SPECS)},ensure_ascii=False))
     return 1 if errors else 0
+
+def build_manifest():
+    """Append the current hash of each package file to its release history; keep removed files' history."""
+    path=ROOT/update_skill.MANIFEST
+    old=json.loads(path.read_text(encoding='utf-8')) if path.is_file() else {'files':{},'removed':{}}
+    files,removed={},{k:list(v) for k,v in old.get('removed',{}).items()}
+    current=set(update_skill.package_files(ROOT))
+    for relative in sorted(current):
+        history=list(old['files'].get(relative,removed.pop(relative,[])))
+        digest=update_skill.file_hash(ROOT/relative)
+        if not history or history[-1]!=digest:history.append(digest)
+        files[relative]=history
+    for relative,history in old['files'].items():
+        if relative not in current:removed[relative]=history
+    return {'files':files,'removed':dict(sorted(removed.items()))}
 
 if __name__=='__main__':raise SystemExit(main())
