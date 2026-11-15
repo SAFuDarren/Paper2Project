@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="#开始使用">开始使用</a> · <a href="#目录怎么组织">目录结构</a> · <a href="#按你的偏好调整">自定义偏好</a> · <a href="README.md">English</a>
+  <a href="#开始使用">开始使用</a> · <a href="#目录怎么组织">目录结构</a> · <a href="#按你的偏好调整">自定义偏好</a> · <a href="#更新">更新</a> · <a href="README.md">English</a>
 </p>
 
 ![模拟研究工作区：左侧为简洁的 Research Map，右侧为展开论文、概念、方向与项目的 Full Network。](assets/readme/research-network.zh-CN.2090ff681fcf.svg)
@@ -21,10 +21,13 @@
 
 ## 能帮助你做什么
 
-- **让论文笔记值得回看。** 记录研究问题、基本假设、方法、结果、论证链路及与自己工作的联系，保留原始来源链接。
-- **让知识相互连接。** 多个项目共用概念笔记，点与点之间说明实际关系，再通过反向链接继续探索。
-- **把自己的增量整理清楚。** 每个项目只有一个主入口，内部把问题、方法、结果和潜在延伸分开记录。
-- **让下一次工作接得上。** 保存阅读偏好、规则入口和任务记录，方便其他 agent 接手。
+- **让论文笔记值得回看。** 记录研究问题、基本假设、方法、结果、论证链路及与自己工作的联系，保留原始来源链接、阅读范围和页码定位。
+- **PDF 原文安全保管。** 交出一个 PDF 文件夹：自动找出重复文件和 DOI/arXiv 编号，抽取文字供阅读，原文复制到笔记旁或在原位置链接。你的文件不会被移动或修改。
+- **成果引用到具体版本。** 指向自己的成果仓库，项目记录按固定 commit 引用其中的文件。
+- **每条联系都有证据。** 方向、项目、概念之间的实质联系，都写明文献事实、与我们工作的关系和尚缺的步骤。
+- **第一次使用就能在 Obsidian 里看到。** 自动建好 Research Map 与 Full Network 两个图谱书签，每篇论文都能从所属领域索引到达。
+- **检索已有内容。** 对笔记和 PDF 全文检索，结果定位到行或页；接入 embedding 模型后可做语义检索。
+- **接得上，也更新得了。** 其他 agent 从同一入口接手；更新 skill 时保留你的定制。
 
 ## 同一套研究，两个视图
 
@@ -43,24 +46,29 @@ Library 中的**论文 A** 与**论文 B**连接到同一个**共享概念**。*
 
 ## 目录怎么组织
 
-**Library 保存已有知识，Projects 保存可以发展的研究。** 两边采用一致的学科与领域层级。论文按其研究内容归类；跨领域项目始终引用同一个项目入口。
+**Library 保存已有知识，Projects 保存可以发展的研究。** 两边采用一致的学科与领域层级。论文按其研究内容归类；跨领域项目始终引用同一个项目入口。工作区可以放在库里任意文件夹，文件夹内部结构固定并由程序检查。
 
 ```text
 Academic/
+├── Academic Home.md
 ├── Library/
 │   └── <学科>/<领域>/
+│       ├── <领域>.md                       领域索引（链接由程序生成）
 │       ├── Papers/
-│       │   └── <公认的小方向> - <论文标题>.md
+│       │   └── <公认的小方向> - <简短标题>.md
+│       ├── PDFs/
+│       │   └── <与论文笔记同名>.pdf
 │       └── Concepts/
-└── Projects/
-    └── <学科>/<领域>/
-        ├── <领域> Research Directions.md
-        └── <项目>/
-            ├── <项目>.md
-            ├── Problem/
-            ├── Methods/
-            ├── Results/
-            └── Extensions/
+├── Projects/
+│   └── <学科>/<领域>/<研究方向>/
+│       ├── <研究方向>.md
+│       └── <项目>/
+│           ├── <项目>.md                   项目主页
+│           ├── Problem/
+│           ├── Methods/
+│           ├── Results/
+│           └── Extensions/
+└── .maintenance/                           登记文件、快照与检索索引
 ```
 
 项目主文件是简洁索引，论文资料统一放在 Library，供多个项目引用。内部记录按实际需要建立，每项结果保留证据与适用范围。潜在应用在完成关键桥接检查之前，继续标为候选。
@@ -73,17 +81,32 @@ Academic/
    git clone https://github.com/SAFuDarren/Paper2Project.git paper2project
    ```
 
-2. 将文件夹放入 agent 的 skill 目录，或让兼容的 agent 阅读 [SKILL.md](SKILL.md)。辅助命令需要 **Python 3.10 及以上**，仅依赖标准库。
+2. 将文件夹放入 agent 的 skill 目录，或让兼容的 agent 阅读 [SKILL.md](SKILL.md)。辅助命令需要 **Python 3.10 及以上**，仅依赖标准库。想要更好的 PDF 文字效果，可选装 [PyMuPDF](https://pymupdf.readthedocs.io/)（`pip install pymupdf`）或 poppler 的 `pdftotext`；未安装时使用内置解析。
 
-3. 结合你的研究背景调用：
+3. 按手头已有的内容调用：
 
    ```text
-   使用 $paper2project 整理我的科研工作区。
-   结合你已经知道的研究背景和阅读偏好来设计。
-   从简洁的结构开始，保留我已有的笔记。
+   使用 $paper2project 在 <文件夹> 建立我的科研工作区。
+   我的论文在 <PDF 文件夹>，成果在 <仓库>。
    ```
 
-首次调用时，agent 利用已有 context 与实际可用的相关 memory，提出合适的结构，只询问会影响设计的关键缺项。下载本身不会启动设置。首次使用时还会把 **Research Map** 和 **Full Network** 两个图谱视图写入 Obsidian 书签。只需交出 PDF 文件夹和自己的成果仓库：辅助命令会清点并读取 PDF，在论文笔记旁保留逐字节一致的原文，按固定 commit 引用成果，带证据登记每条联系，并为全部内容建立检索。工作区可以放在任意文件夹，文件夹内部结构固定。已有笔记由辅助命令完成接入、带链接改写的迁移、打标签和建索引，保证每篇论文都能从所属领域索引到达。
+   ```text
+   使用 $paper2project 整理 <文件夹> 里已有的研究笔记。
+   保留我的笔记，接入并连接起来。
+   ```
+
+agent 会利用已有背景，只询问会影响设计的关键缺项，并一直做到 `check` 报告工作区完成：结构、图谱视图、带原文的论文笔记、引用的成果和建好的索引链接。阅读与判断来源由 agent 完成；路径、ID、索引链接、标签、迁移、书签等由规则决定的步骤都由辅助命令完成。下载仓库本身不会运行任何东西。
+
+### 更新
+
+把新版下载到另一个文件夹，用它更新已安装的副本。你改过的文件会保留（新版写在旁边，后缀 `.new`），你自己的文件和 `local/` 不会被碰：
+
+```sh
+python <新下载>/scripts/update_skill.py --target <已安装的 skill> --apply
+python scripts/p2p.py upgrade --root <工作区> --apply
+```
+
+embedding 模型、数据库等扩展配置保存在工作区配置中，更新后保持不变。详见[更新时保留定制](references/updates.md)。
 
 ## 发现与审核
 
@@ -103,32 +126,40 @@ Academic/
 
 | 文档 | 用途 |
 | --- | --- |
-| [首次使用与偏好](references/onboarding.md) | 基于背景设计、选择语言及后续调整 |
+| [首次使用与偏好](references/onboarding.md) | 基于背景设计、接入已有笔记、选择语言 |
+| [PDF 与已有成果](references/pdfs-and-results.md) | 从 PDF 文件夹和成果仓库到完成的工作区 |
+| [检索](references/retrieval.md) | 检索笔记与 PDF，可选语义检索 |
 | [阅读与研究流程](references/workflow.md) | 论文卡片、概念、潜在方向与项目记录 |
-| [图谱与链接](references/links-and-graphs.md) | 图谱角色、联系依据和迁移检查 |
-| [规则与任务交接](references/preferences-and-handoff.md) | 稳定入口与跨 agent 接手 |
-| [示例](examples/) | 小型偏好输入与多语言笔记卡片 |
-| [拓展接口](references/extensions.md) | 可选的 embedding、RAG、agent 与知识库接入 |
+| [图谱与链接](references/links-and-graphs.md) | 图谱视图、生成的索引与登记的联系 |
+| [规则与任务交接](references/preferences-and-handoff.md) | 工作简报、快照与跨 agent 接手 |
+| [更新](references/updates.md) | 安全更新与兼容约定 |
+| [拓展接口](references/extensions.md) | 自己的 embedding、RAG、agent 或数据库接入 |
+| [示例](examples/) | 偏好输入、笔记卡片、成果引用与一条登记的联系 |
 
 <details>
 <summary><strong>辅助命令与测试</strong></summary>
 
-在 skill 文件夹中运行：
+在 skill 文件夹中运行；所有写入命令在加 `--apply` 之前都只预览：
 
 ```sh
 python scripts/p2p.py --help
-python scripts/p2p.py locales
-python scripts/p2p.py check --root /path/to/Academic
-python scripts/p2p.py export --root /path/to/Academic --output /path/to/notes.jsonl
+python scripts/p2p.py init --root <工作区> --profile profile.json --non-interactive --apply
+python scripts/p2p.py pdfs scan --root <工作区> --from <PDF 文件夹>
+python scripts/p2p.py render --root <工作区> --kind paper --input card.json --apply
+python scripts/p2p.py repo scan --path <成果仓库>
+python scripts/p2p.py relate --root <工作区> --plan relations.json --apply
+python scripts/p2p.py check --root <工作区>
+python scripts/p2p.py brief --root <工作区>
+python scripts/retrieve.py search --root <工作区> "你的问题"
 python -m unittest discover -s tests -v
 ```
 
-GitHub Actions 覆盖 **Linux、macOS、Windows × Python 3.10–3.14**。15 组组合各使用两个不同的哈希种子运行完整测试，并核对 README 配图的生成结果可复现。程序检查结构、本地链接、标识、语言处理和受保护的写入。来源阅读、科学判断与翻译质量仍由 agent 负责。
+GitHub Actions 覆盖 **Linux、macOS、Windows × Python 3.10–3.14**。15 组组合各使用两个不同的哈希种子运行完整测试，并核对 README 配图的生成结果可复现。测试包含一次从 PDF 和成果仓库到完整工作区的端到端流程。程序检查结构、链接、标识、原文、登记的联系、语言处理和受保护的写入。来源阅读、科学判断与翻译质量仍由 agent 负责。
 
 运行 `python scripts/render_readme_graph.py` 可以复现两张 README 配图。配图只使用模拟数据和默认角色配色。
 
 </details>
 
-Embedding、RAG 和外部知识库保留为可选接口，默认关闭。核心流程使用 Markdown 文件和本地辅助命令。
+全部在本地基于 Markdown 文件运行。检索不需要任何模型；embedding、RAG 和外部知识库只在你配置后使用，配置在更新后保持不变。
 
 [MIT 许可证](LICENSE)。

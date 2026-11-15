@@ -1,4 +1,4 @@
 interface:
   display_name: "Paper2Project"
-  short_description: "Connect papers, concepts, and research projects"
-  default_prompt: "Use $paper2project to understand my research context and design or maintain my research workspace."
+  short_description: "Turn your PDFs and results into a connected research map"
+  default_prompt: "Use $paper2project to build or maintain my research workspace from my papers (PDFs), notes and existing results."

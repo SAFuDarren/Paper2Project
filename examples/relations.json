@@ -1,0 +1,20 @@
+{
+  "relations": [
+    {
+      "id": "R1",
+      "kind": "research",
+      "a": "Projects/Computer Science/Machine Learning/Sequence Models/Sequence Models.md",
+      "b": "Projects/Computer Science/Theoretical Computer Science/Formal Methods/Formal Methods.md",
+      "papers": [
+        "Library/Computer Science/Machine Learning/Papers/Sequence Models - Synthetic Workflow.md"
+      ],
+      "text": {
+        "fr": {
+          "literature": "Exemple fictif : ce que la source établit.",
+          "connection": "Exemple fictif : ce que cela change pour notre travail.",
+          "missing_step": "Exemple fictif : ce qui reste à démontrer."
+        }
+      }
+    }
+  ]
+}
